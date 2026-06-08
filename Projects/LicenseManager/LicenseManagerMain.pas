@@ -30,7 +30,6 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure btnCreateClick(Sender: TObject);
-    procedure btnDecodeClick(Sender: TObject);
     procedure lvLicensesSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
     procedure chkLifetimeClick(Sender: TObject);
     procedure btnPresetClick(Sender: TObject);

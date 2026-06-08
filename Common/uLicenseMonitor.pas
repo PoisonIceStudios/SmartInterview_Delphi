@@ -29,6 +29,7 @@ function LicenseMonitorPeriodicCheck(out Message: string): TLicensePeriodicResul
 implementation
 
 uses
+  Winapi.Windows,
   System.DateUtils,
   System.Hash,
   uLicenseCodec,
@@ -75,7 +76,7 @@ end;
 
 procedure LicenseMonitorPersistAnchor(const Utc: TDateTime; const User, Key: string);
 begin
-  RegistrySetString(AnchorUtcKey, FloatToStr(Utc, TFormatSettings.Invariant));
+  RegistrySetString(AnchorUtcKey, FloatToStr(Utc, TFormatSettings.Invariant()));
   RegistrySetString(AnchorHmacKey, AnchorHmac(Utc, User, Key));
 end;
 
@@ -83,14 +84,16 @@ procedure LicenseMonitorLoadAnchorFromRegistry(const User, Key: string);
 var
   Raw, Expected: string;
   Utc: TDateTime;
+  UtcValue: Double;
 begin
   GAnchorValid := False;
   Raw := RegistryGetString(AnchorUtcKey);
   Expected := RegistryGetString(AnchorHmacKey);
   if (Raw = '') or (Expected = '') then
     Exit;
-  if not TryStrToFloat(Raw, Utc, TFormatSettings.Invariant) then
+  if not TryStrToFloat(Raw, UtcValue, TFormatSettings.Invariant()) then
     Exit;
+  Utc := UtcValue;
   if not SameText(AnchorHmac(Utc, User, Key), Expected) then
     Exit;
   GAnchorUtc := Utc;
