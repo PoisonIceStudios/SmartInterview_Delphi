@@ -45,6 +45,8 @@ implementation
 
 type
   TThemeCtrl = class(TControl);
+  TThemeWinControl = class(TWinControl);
+  TThemeCustomEdit = class(TCustomEdit);
 
 function ThemeColor(R, G, B: Byte): TColor;
 begin
@@ -152,8 +154,8 @@ begin
   end;
   if Control is TCustomEdit then
   begin
-    TCustomEdit(Control).BorderStyle := bsNone;
-    TCustomEdit(Control).ParentColor := False;
+    TThemeCustomEdit(Control).BorderStyle := bsNone;
+    TThemeCustomEdit(Control).ParentColor := False;
   end;
 end;
 
@@ -164,7 +166,7 @@ begin
   Form.Font.Color := ThemeText;
   Form.DoubleBuffered := True;
   TitlePanel.Color := ThemeTitleBar;
-  TitlePanel.ParentBackground := False;
+  TThemeWinControl(TitlePanel).ParentBackground := False;
   TitlePanel.DoubleBuffered := True;
   TitleLabel.Font.Color := ThemeText;
   TitleLabel.ParentFont := False;
@@ -175,8 +177,8 @@ begin
   Memo.Color := ThemeSurfaceAlt;
   Memo.Font.Name := ThemeFontFamily;
   Memo.Font.Color := ThemeText;
-  Memo.BorderStyle := bsNone;
-  Memo.ParentColor := False;
+  TThemeCustomEdit(Memo).BorderStyle := bsNone;
+  TThemeCustomEdit(Memo).ParentColor := False;
   Memo.StyleElements := [seFont, seClient];
 end;
 
@@ -196,7 +198,7 @@ begin
       Color := ThemeSurface;
     StyleElements := [seFont, seClient];
   end;
-  Button.ParentBackground := False;
+  TThemeWinControl(Button).ParentBackground := False;
 end;
 
 procedure StyleCheckBox(CheckBox: TCheckBox);
@@ -204,7 +206,7 @@ begin
   CheckBox.Font.Name := ThemeFontFamily;
   CheckBox.Font.Color := ThemeText;
   CheckBox.ParentFont := False;
-  CheckBox.ParentColor := True;
+  TThemeCtrl(CheckBox).ParentColor := True;
   CheckBox.StyleElements := [seFont];
 end;
 
