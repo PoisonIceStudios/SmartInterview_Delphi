@@ -1,9 +1,9 @@
-object FrmSettings: TFrmSettings
+object FrmMicSettings: TFrmMicSettings
   Left = 0
   Top = 0
   BorderStyle = bsDialog
-  Caption = 'Automatic mode'
-  ClientHeight = 380
+  Caption = 'Microphone'
+  ClientHeight = 330
   ClientWidth = 430
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -14,29 +14,38 @@ object FrmSettings: TFrmSettings
   Position = poScreenCenter
   OnClose = FormClose
   OnCreate = FormCreate
+  OnDestroy = FormDestroy
   OnShow = FormShow
   TextHeight = 15
   object lblInfo: TLabel
     Left = 20
     Top = 52
     Width = 390
-    Height = 40
+    Height = 32
     AutoSize = False
     Caption = 
-      'Listens to PC audio only (interviewer). Your microphone is not u' +
-      'sed in automatic mode. Settings are saved automatically.'
+      'Optional microphone for manual mode: pick your device and set how ' +
+      'loud your voice must be before the mic is used. PC audio is alwa' +
+      'ys the default source.'
     WordWrap = True
+  end
+  object lblDevice: TLabel
+    Left = 20
+    Top = 120
+    Width = 104
+    Height = 15
+    Caption = 'Microphone device'
   end
   object lblMeter: TLabel
     Left = 20
-    Top = 128
-    Width = 200
+    Top = 176
+    Width = 240
     Height = 15
-    Caption = 'PC audio level (line = voice threshold)'
+    Caption = 'Microphone level (line = activation threshold)'
   end
   object lblState: TLabel
     Left = 20
-    Top = 180
+    Top = 228
     Width = 40
     Height = 15
     Caption = 'Silence'
@@ -49,24 +58,10 @@ object FrmSettings: TFrmSettings
   end
   object lblThresh: TLabel
     Left = 20
-    Top = 204
-    Width = 81
-    Height = 15
-    Caption = 'Voice threshold'
-  end
-  object lblSilence: TLabel
-    Left = 20
     Top = 256
-    Width = 85
+    Width = 120
     Height = 15
-    Caption = 'Silence duration'
-  end
-  object lblMin: TLabel
-    Left = 20
-    Top = 308
-    Width = 93
-    Height = 15
-    Caption = 'Minimum speech'
+    Caption = 'Microphone threshold'
   end
   object pnlTitle: TPanel
     Left = 0
@@ -79,9 +74,9 @@ object FrmSettings: TFrmSettings
     object lblTitle: TLabel
       Left = 16
       Top = 10
-      Width = 113
+      Width = 80
       Height = 20
-      Caption = 'Automatic mode'
+      Caption = 'Microphone'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -15
@@ -90,30 +85,31 @@ object FrmSettings: TFrmSettings
       ParentFont = False
     end
   end
-  object chkAuto: TCheckBox
+  object chkUseMic: TCheckBox
     Left = 20
-    Top = 100
-    Width = 200
+    Top = 92
+    Width = 390
     Height = 17
-    Caption = 'Enable automatic mode'
+    Caption = 'Also use microphone while holding the listening key (manual mode)'
     TabOrder = 1
-    OnClick = chkAutoClick
+    OnClick = chkUseMicClick
+  end
+  object cmbDevice: TComboBox
+    Left = 20
+    Top = 140
+    Width = 390
+    Height = 23
+    Style = csDropDownList
+    TabOrder = 2
+    OnChange = cmbDeviceChange
   end
   object pnlMeterWrap: TPanel
     Left = 20
-    Top = 148
+    Top = 196
     Width = 390
     Height = 22
     BevelOuter = bvNone
-    TabOrder = 2
-    object pbMeterOverlay: TPaintBox
-      Left = 0
-      Top = 0
-      Width = 390
-      Height = 22
-      Align = alClient
-      OnPaint = pbMeterOverlayPaint
-    end
+    TabOrder = 3
     object prgMeter: TProgressBar
       Left = 0
       Top = 0
@@ -123,42 +119,25 @@ object FrmSettings: TFrmSettings
       Smooth = True
       TabOrder = 0
     end
+    object pbMeterOverlay: TPaintBox
+      Left = 0
+      Top = 0
+      Width = 390
+      Height = 22
+      Align = alClient
+      OnPaint = pbMeterOverlayPaint
+    end
   end
   object trkThresh: TTrackBar
     Left = 16
-    Top = 217
-    Width = 394
+    Top = 273
+    Width = 398
     Height = 33
     Max = 1000
-    TabOrder = 3
-    TickMarks = tmBoth
-    OnChange = trkThreshChange
-  end
-  object trkSilence: TTrackBar
-    Left = 20
-    Top = 272
-    Width = 390
-    Height = 33
-    Max = 2500
-    Min = 200
-    Frequency = 100
-    Position = 800
+    Position = 500
     TabOrder = 4
     TickMarks = tmBoth
-    OnChange = trkSilenceChange
-  end
-  object trkMin: TTrackBar
-    Left = 20
-    Top = 324
-    Width = 390
-    Height = 33
-    Max = 2000
-    Min = 100
-    Frequency = 100
-    Position = 400
-    TabOrder = 5
-    TickMarks = tmBoth
-    OnChange = trkMinChange
+    OnChange = trkThreshChange
   end
   object tmrMeter: TTimer
     Enabled = False

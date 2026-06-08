@@ -45,7 +45,6 @@ type
     FOnClosed: TProc;
     FRms: Single;
     FPrevOnSystemSamples: TWasapiSampleEvent;
-    procedure StyleForm;
     procedure ResetMeter;
     procedure UpdateLabels;
     procedure BindControls;
@@ -53,6 +52,7 @@ type
     procedure InvalidateMeterOverlay;
     procedure ChainedOnSystemSamples(const Samples: TArray<Single>);
     procedure OnSettingsSamples(const Samples: TArray<Single>);
+    procedure EnsureMeterOverlayOnTop;
     function ThresholdToValue(T: Single): Integer;
     function ValueToThreshold(V: Integer): Single;
   public
@@ -63,20 +63,20 @@ type
     procedure SyncAutoMode(On: Boolean);
   end;
 
+var
+  FrmSettings: TFrmSettings;
+
 implementation
 
 {$R *.dfm}
 
 uses
-  uAppSettings, uTheme;
+  uAppSettings;
 
 const
-  MeterMax = 0.1;
+  MeterMax = 1.0;
   PBM_SETBARCOLOR = $0409;
   PBM_SETBKCOLOR = $2001;
-
-type
-  TCheckBoxAccess = class(TCheckBox);
 
 procedure TFrmSettings.Configure(Seg: TVoiceSegmenter; Audio: TAudioCapture;
   const IsAutoOn: TFunc<Boolean>; const SetAuto: TProc<Boolean>;
@@ -104,7 +104,6 @@ begin
   FRms := 0;
   prgMeter.Position := 0;
   lblState.Caption := 'Silence';
-  lblState.Font.Color := ThemeTextDim;
   ApplyMeterStyle(False);
   InvalidateMeterOverlay;
 end;
@@ -127,32 +126,6 @@ begin
   UpdateLabels;
 end;
 
-procedure TFrmSettings.StyleForm;
-begin
-  Color := ThemeBase;
-  Font.Name := ThemeFontFamily;
-  Font.Color := ThemeText;
-  pnlTitle.Color := ThemeTitleBar;
-  lblTitle.Font.Color := ThemeText;
-  lblInfo.Font.Color := ThemeTextDim;
-  lblMeter.Font.Color := ThemeText;
-  lblThresh.Font.Color := ThemeText;
-  lblSilence.Font.Color := ThemeText;
-  lblMin.Font.Color := ThemeText;
-  with TCheckBoxAccess(chkAuto) do
-  begin
-    Font.Color := ThemeText;
-    Color := ThemeBase;
-  end;
-  pnlMeterWrap.Color := ThemeSurfaceAlt;
-  pbMeterOverlay.ControlStyle := pbMeterOverlay.ControlStyle + [csParentBackground];
-  prgMeter.Min := 0;
-  prgMeter.Max := 100;
-  prgMeter.Position := 0;
-  prgMeter.Smooth := True;
-  ApplyMeterStyle(False);
-end;
-
 procedure TFrmSettings.ApplyMeterStyle(VoiceDetected: Boolean);
 var
   BarColor: TColor;
@@ -160,11 +133,11 @@ begin
   if not prgMeter.HandleAllocated then
     Exit;
   if VoiceDetected then
-    BarColor := ThemeOk
+    BarColor := clGreen
   else
-    BarColor := ThemeIndicatorActive;
+    BarColor := clHighlight;
   SendMessage(prgMeter.Handle, PBM_SETBARCOLOR, 0, ColorToRGB(BarColor));
-  SendMessage(prgMeter.Handle, PBM_SETBKCOLOR, 0, ColorToRGB(ThemeSurfaceAlt));
+  SendMessage(prgMeter.Handle, PBM_SETBKCOLOR, 0, ColorToRGB(clBtnFace));
 end;
 
 function TFrmSettings.ThresholdToValue(T: Single): Integer;
@@ -198,7 +171,19 @@ begin
   trkMin.Min := 100;
   trkMin.Max := 2000;
   trkMin.Frequency := 100;
-  StyleForm;
+  pbMeterOverlay.ControlStyle := pbMeterOverlay.ControlStyle + [csParentBackground];
+  prgMeter.Min := 0;
+  prgMeter.Max := 100;
+  prgMeter.Position := 0;
+  prgMeter.Smooth := True;
+  ApplyMeterStyle(False);
+  EnsureMeterOverlayOnTop;
+end;
+
+procedure TFrmSettings.EnsureMeterOverlayOnTop;
+begin
+  if (pnlMeterWrap <> nil) and (pbMeterOverlay <> nil) then
+    pbMeterOverlay.BringToFront;
 end;
 
 procedure TFrmSettings.OnSettingsSamples(const Samples: TArray<Single>);
@@ -231,6 +216,7 @@ begin
     FPrevOnSystemSamples := FAudio.OnSystemSamples;
     FAudio.OnSystemSamples := ChainedOnSystemSamples;
   end;
+  EnsureMeterOverlayOnTop;
   ApplyMeterStyle(False);
   tmrMeter.Enabled := True;
 end;
@@ -246,7 +232,7 @@ begin
     SaveVad(FSegmenter);
   if Assigned(FOnClosed) then
     FOnClosed();
-  Action := caFree;
+  Action := caHide;
 end;
 
 procedure TFrmSettings.chkAutoClick(Sender: TObject);
@@ -296,15 +282,9 @@ begin
   prgMeter.Position := Level;
   Voice := FRms > FSegmenter.Threshold;
   if Voice then
-  begin
-    lblState.Caption := 'Voice detected';
-    lblState.Font.Color := ThemeOk;
-  end
+    lblState.Caption := 'Voice detected'
   else
-  begin
     lblState.Caption := 'Silence';
-    lblState.Font.Color := ThemeTextDim;
-  end;
   ApplyMeterStyle(Voice);
   InvalidateMeterOverlay;
 end;
@@ -318,7 +298,9 @@ begin
   ThreshX := Round(EnsureRange(FSegmenter.Threshold / MeterMax, 0, 1) * pbMeterOverlay.Width);
   with pbMeterOverlay.Canvas do
   begin
-    Pen.Color := ThemeWarn;
+    Brush.Style := bsClear;
+    SetBkMode(Handle, TRANSPARENT);
+    Pen.Color := clMaroon;
     Pen.Width := 2;
     MoveTo(ThreshX, 0);
     LineTo(ThreshX, pbMeterOverlay.Height);

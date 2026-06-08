@@ -3,7 +3,7 @@ object FrmSplash: TFrmSplash
   Top = 0
   BorderStyle = bsNone
   Caption = 'SmartInterview'
-  ClientHeight = 320
+  ClientHeight = 282
   ClientWidth = 560
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -20,22 +20,21 @@ object FrmSplash: TFrmSplash
     Left = 0
     Top = 0
     Width = 560
-    Height = 288
+    Height = 282
     Align = alClient
     Proportional = True
     Stretch = True
     ExplicitTop = -6
+    ExplicitHeight = 288
   end
   object lblStatus: TLabel
     Left = 0
-    Top = 288
+    Top = 224
     Width = 560
-    Height = 32
-    Align = alBottom
+    Height = 58
     Alignment = taCenter
     AutoSize = False
     Caption = 'Starting...'
     Layout = tlCenter
-    ExplicitTop = 296
   end
 end

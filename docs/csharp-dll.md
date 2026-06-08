@@ -27,8 +27,8 @@ Delphi **non** usa `LoadLibrary`, COM o P/Invoke verso il motore: l'isolamento p
 
 | File | Ruolo |
 |------|-------|
-| `Engine/Program.cs` | Host IPC: legge JSON da stdin, dispatch comandi, scrive risposte su stdout |
-| `Engine/SmartInterview.Engine.csproj` | Progetto .NET 10 win-x64, pacchetti LLamaSharp + Whisper.net |
+| `Projects/Engine/Program.cs` | Host IPC: legge JSON da stdin, dispatch comandi, scrive risposte su stdout |
+| `Projects/Engine/SmartInterview.Engine.csproj` | Progetto .NET 10 win-x64, pacchetti LLamaSharp + Whisper.net |
 
 ### Pacchetti principali
 
@@ -135,8 +135,8 @@ Build Debug con `DIAGNOSTIC_LOG`: bypass auth per sviluppo locale.
 
 1. `EngineDeploy\SmartInterview.Engine.dll` accanto a `SmartInterview.exe`
 2. `SmartInterview.Engine.dll` nella stessa cartella dell'exe
-3. `Engine\bin\Release\net10.0-windows\win-x64\SmartInterview.Engine.dll` (sviluppo)
-4. `Engine\bin\Debug\net10.0-windows\win-x64\SmartInterview.Engine.dll` (sviluppo)
+3. `Projects\Engine\bin\Release\net10.0-windows\win-x64\SmartInterview.Engine.dll` (sviluppo)
+4. `Projects\Engine\bin\Debug\net10.0-windows\win-x64\SmartInterview.Engine.dll` (sviluppo)
 
 ### Deploy automatico
 
@@ -152,7 +152,7 @@ Include DLL native CUDA12, Vulkan, Whisper runtime. La build verifica la presenz
 
 Per un nuovo comando:
 
-1. Handler in `Engine/Program.cs` (`HandleAsync`)
+1. Handler in `Projects/Engine/Program.cs` (`HandleAsync`)
 2. Wrapper in `uPipeEngine.pas` (`SendAndWait` + metodo pubblico)
 3. Chiamata da `uMainForm.pas` (o altra unità UI)
 

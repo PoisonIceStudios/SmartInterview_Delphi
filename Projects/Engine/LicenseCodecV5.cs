@@ -7,16 +7,15 @@ internal static class LicenseCodecV5
 {
     public const string KeyPrefix = "SI5-";
     private const byte Magic = 0x55;
-    private const int PayloadBytes = 21;
     private const int SigBytes = 64;
-    private const int TotalBytes = 85;
-    private const int Base32Chars = 136;
-    private const int Groups = 34;
+    private const int HeaderBytes = 5;
     private const string Base32Alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
     private static readonly byte[] PublicKeyBlob = Convert.FromHexString(
-        "45435331200000001FC80934B34F5AD860ECD715B3A9225FF88387B95DCBB5774096644" +
-        "FF95D506B7D56E98C5D09EB9B3CAAC1C703087E4940E63B807AF1ABB47FD796A80341FFD0");
+        "45435331200000000D72BBD2CB65C07A57795369F5A0538BEBC0FCE8DB653C5EB25E4A961486320B85" +
+        "800CF1B870739CE62A6F1A1ECA5759DA424F8613A8F4E944A69699DC36D026");
+
+    private static int Base32CharCount(int byteCount) => (byteCount * 8 + 4) / 5;
 
     public static bool IsV5Key(string licenseKey) =>
         licenseKey.Trim().StartsWith("SI5", StringComparison.OrdinalIgnoreCase);
@@ -43,7 +42,7 @@ internal static class LicenseCodecV5
         }
 
         var normalized = NormalizeKeyV5(licenseKey);
-        if (normalized.Length != Base32Chars)
+        if (normalized.Length < Base32CharCount(HeaderBytes))
         {
             error = "License key format is invalid.";
             return false;
@@ -51,9 +50,25 @@ internal static class LicenseCodecV5
 
         try
         {
-            var combined = DecodeBase32(normalized, TotalBytes);
-            var payloadBytes = combined.AsSpan(0, PayloadBytes).ToArray();
-            var sigBytes = combined.AsSpan(PayloadBytes, SigBytes).ToArray();
+            var header = DecodeBase32(normalized.Substring(0, Base32CharCount(HeaderBytes)), HeaderBytes);
+            int userLen = header[4];
+            if (userLen < 1 || userLen > LicenseCodec.MaxUsernameLen)
+            {
+                error = "License key format is invalid.";
+                return false;
+            }
+
+            var payloadLen = HeaderBytes + userLen;
+            var total = payloadLen + SigBytes;
+            if (normalized.Length != Base32CharCount(total))
+            {
+                error = "License key format is invalid.";
+                return false;
+            }
+
+            var combined = DecodeBase32(normalized, total);
+            var payloadBytes = combined.AsSpan(0, payloadLen).ToArray();
+            var sigBytes = combined.AsSpan(payloadLen, SigBytes).ToArray();
 
             if (!TryParsePayload(payloadBytes, out payload, out error))
                 return false;
@@ -114,23 +129,22 @@ internal static class LicenseCodecV5
         payload = default;
         error = null;
 
-        if (plain.Length != PayloadBytes || plain[0] != Magic)
+        if (plain.Length < HeaderBytes || plain[0] != Magic)
         {
             error = "License key format is invalid (expected v5).";
             return false;
         }
 
         var flags = plain[1];
-        var expiryUnixDay = BitConverter.ToUInt32(plain, 2);
-        var issuedUnixDay = BitConverter.ToUInt32(plain, 6);
-        var len = plain[10];
-        if (len < 1 || len > LicenseCodec.MaxUsernameLen || 11 + len > PayloadBytes)
+        uint expiryUnixDay = (uint)(plain[2] | (plain[3] << 8));
+        var len = plain[4];
+        if (len < 1 || len > LicenseCodec.MaxUsernameLen || HeaderBytes + len != plain.Length)
         {
             error = "License key format is invalid.";
             return false;
         }
 
-        var userNorm = LicenseCodec.NormalizeUsername(Encoding.UTF8.GetString(plain, 11, len));
+        var userNorm = LicenseCodec.NormalizeUsername(Encoding.UTF8.GetString(plain, HeaderBytes, len));
         if (string.IsNullOrEmpty(userNorm))
         {
             error = "License username is missing.";
@@ -143,7 +157,7 @@ internal static class LicenseCodecV5
             Active = (flags & LicenseCodec.FlagActive) != 0,
             Lifetime = (flags & LicenseCodec.FlagLifetime) != 0,
             ExpiryUnixDay = expiryUnixDay,
-            IssuedUnixDay = issuedUnixDay,
+            IssuedUnixDay = 0,
             Version = 5
         };
         return true;
@@ -175,6 +189,9 @@ internal static class LicenseCodecV5
 
         foreach (var c in encoded)
         {
+            if (c == '-')
+                continue;
+
             var idx = Base32Alphabet.IndexOf(c);
             if (idx < 0)
                 throw new ArgumentException("License key contains invalid characters.");

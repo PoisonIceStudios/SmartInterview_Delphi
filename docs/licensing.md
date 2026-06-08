@@ -20,8 +20,8 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 | Servizio app | `uLicenseService.pas` | Validazione, attivazione, anchor registry, token sessione |
 | Ora online | `Common/uLicenseOnlineTime.pas` | Fetch UTC da worldtimeapi.org / timeapi.io |
 | Sessione motore | `uSessionAuth.pas` | Token HMAC v2 + env vars processo figlio |
-| Auth motore C# | `Engine/EngineSessionAuth.cs` | Gate licenza lato DLL |
-| Codec motore C# | `Engine/LicenseCodec.cs`, `LicenseCodecV5.cs` | Validazione v4/v5 nel processo .NET |
+| Auth motore C# | `Projects/Engine/EngineSessionAuth.cs` | Gate licenza lato DLL |
+| Codec motore C# | `Projects/Engine/LicenseCodec.cs`, `LicenseCodecV5.cs` | Validazione v4/v5 nel processo .NET |
 | Fingerprint | `uMachineFingerprint.pas` | Codice richiesta attivazione (non usato nel token sessione) |
 | Richiesta attivazione | `uActivationRequest.pas` | Codice `RQ1` per supporto venditori |
 | Tool admin | `LicenseManager.exe` | Generazione e gestione licenze |
@@ -31,7 +31,7 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 - Prefisso **`SI5-`**, 34 gruppi da 4 caratteri Base32 (~136 caratteri payload+firma)
 - Payload 21 byte: magic `$55`, flags, scadenza (giorno UTC), **data emissione** (giorno UTC), username (max 10)
 - Firma **ECDSA P-256** 64 byte sulla SHA-256 del payload
-- Chiave **privata** solo in `Projects/LicenseManager/Keys/license_signing.priv` (generare con `dotnet run --project tools/KeyGen`)
+- Chiave **privata** solo in `Projects/LicenseManager/Keys/license_signing.priv` (generare dal LicenseManager: menu **Chiavi → Genera chiavi di firma**)
 - Chiave **pubblica** embedded in app ed engine (`uLicensePublicKey.pas`, `LicenseCodecV5.cs`)
 
 ## Formato chiave v4 (legacy)
@@ -126,13 +126,14 @@ Non serve essere online ogni 24 ore se la licenza non è scaduta: serve un check
 
 Utility separata per venditori/admin:
 
-- **Richiede internet** per creare licenze (`TryFetchUtcNow` prima di ogni emissione)
+- Funziona **offline**: usa l'orologio locale del PC per la data di emissione (è SmartInterview a verificare online lato client)
 - Crea licenze con username, scadenza (o lifetime), flag active
-- Preset rapidi: 1/3/6/12 mesi (basati sulla data UTC online, non sull'orologio locale)
+- Preset rapidi: 1/3/6/12 mesi (basati sulla data locale)
 - Salva elenco in `licenses.json` accanto all'exe (un solo record per username: creare di nuovo **sostituisce** la chiave precedente)
 - Decode/visualizza payload chiavi esistenti
+- Menu contestuale (tasto destro): copia chiave / elimina utente
 
-- Genera chiavi v5: `dotnet run --project tools/KeyGen` (prima volta o rotazione produzione)
+- Genera chiavi v5 dal menu **Chiavi → Genera chiavi di firma** (prima volta o rotazione produzione); poi incolla la chiave pubblica mostrata in `Common/uLicensePublicKey.pas` e `Projects/Engine/LicenseCodecV5.cs` e ricompila
 
 Vedi [Guida sicurezza semplice](sicurezza-guida.md) e [Audit sicurezza](security-audit.md).
 

@@ -56,7 +56,7 @@ Lo stack è ibrido Delphi + .NET:
 |----------|----------|-------|
 | SmartInterview | `Projects/SmartInterview/` | Applicazione principale |
 | LicenseManager | `Projects/LicenseManager/` | Tool interno per generare/gestire licenze |
-| Engine | `Engine/` | Assembly C# motore AI |
+| Engine | `Projects/Engine/` | Assembly C# motore AI |
 | Common | `Common/` | Unità Pascal condivise |
 | Group project | `Projects.groupproj` | Build di entrambi i progetti Delphi |
 
@@ -136,9 +136,9 @@ sequenceDiagram
 
 ## Rilevamento hardware e backend GPU
 
-`Engine/HardwareProbe.cs` rileva GPU NVIDIA (incluso Blackwell RTX 50xx) e VRAM da registry.
+`Projects/Engine/HardwareProbe.cs` rileva GPU NVIDIA (incluso Blackwell RTX 50xx) e VRAM da registry.
 
-`Engine/NativeBackendBootstrap.cs` seleziona il backend llama.cpp:
+`Projects/Engine/NativeBackendBootstrap.cs` seleziona il backend llama.cpp:
 
 | GPU | Ordine LLM |
 |-----|------------|
@@ -157,7 +157,7 @@ I modelli **non** sono nel repository. Al primo avvio vengono scaricati in:
 
 Quando il motore gira da `EngineDeploy\`, `AppPaths.cs` risale alla cartella `models\` accanto a `SmartInterview.exe` per evitare download duplicati.
 
-Cataloghi: `Engine/ModelCatalog.cs`, `Engine/WhisperModelCatalog.cs` (mirror Delphi in `uModelCat.pas`, `uWhisperCat.pas`).
+Cataloghi: `Projects/Engine/ModelCatalog.cs`, `Projects/Engine/WhisperModelCatalog.cs` (mirror Delphi in `uModelCat.pas`, `uWhisperCat.pas`).
 
 | Tier | LLM | Whisper |
 |------|-----|---------|

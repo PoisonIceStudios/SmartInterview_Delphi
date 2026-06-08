@@ -12,6 +12,7 @@ object FrmProfile: TFrmProfile
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
+  Visible = False
   OnCreate = FormCreate
   TextHeight = 15
   object pnlTitle: TPanel

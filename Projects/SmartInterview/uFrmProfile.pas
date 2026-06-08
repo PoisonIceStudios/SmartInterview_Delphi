@@ -29,35 +29,17 @@ type
     procedure btnLaterClick(Sender: TObject);
   private
     FResult: TInterviewProfile;
-    procedure StyleForm;
     procedure LoadProfile(const P: TInterviewProfile);
   public
     property ProfileResult: TInterviewProfile read FResult;
   end;
 
+var
+  FrmProfile: TFrmProfile;
+
 implementation
 
 {$R *.dfm}
-
-uses
-  uTheme;
-
-procedure TFrmProfile.StyleForm;
-begin
-  StyleDialogForm(Self, pnlTitle, lblTitle);
-  lblInfo.Font.Color := ThemeTextDim;
-  lblRole.Font.Color := ThemeText;
-  lblStack.Font.Color := ThemeText;
-  lblJob.Font.Color := ThemeText;
-  lblExp.Font.Color := ThemeText;
-  StyleInput(edtRole);
-  StyleInput(edtStack);
-  StyleDialogMemo(memJob);
-  StyleDialogMemo(memExp);
-  StyleDialogButton(btnSave, True);
-  StyleDialogButton(btnClear, False);
-  StyleDialogButton(btnLater, False);
-end;
 
 procedure TFrmProfile.LoadProfile(const P: TInterviewProfile);
 begin
@@ -70,7 +52,6 @@ end;
 procedure TFrmProfile.FormCreate(Sender: TObject);
 begin
   LoadProfile(ProfileLoad);
-  StyleForm;
 end;
 
 procedure TFrmProfile.btnSaveClick(Sender: TObject);

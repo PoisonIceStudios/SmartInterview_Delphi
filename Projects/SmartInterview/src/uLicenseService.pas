@@ -77,6 +77,31 @@ begin
     Exit;
 
   StoredUser := LicenseStoreGetForumUsername;
+
+  // Decode offline first. The signature is verified offline; the online clock is only
+  // needed to enforce an *expiry date*. A decode failure means the key is genuinely bad.
+  if not LicenseCodecTryDecodePayload(Key, Payload, Err) then
+  begin
+    GLastCheckError := Err;
+    Exit;
+  end;
+
+  // Lifetime licenses never expire → validate fully offline (no time server, no freeze,
+  // no false negative when worldtimeapi/timeapi are unreachable).
+  if Payload.Lifetime then
+  begin
+    if not LicenseCodecTryValidate(Key, StoredUser, Now, Err) then
+    begin
+      GLastCheckError := Err;
+      if not Payload.Active then
+        LicenseStoreClear;
+      Exit;
+    end;
+    Result := True;
+    Exit;
+  end;
+
+  // Time-limited licenses need a trusted UTC to check the expiry date.
   if not TryFetchUtcNow(Utc, Err) then
   begin
     GLastCheckError := Err;
@@ -86,8 +111,9 @@ begin
   if not LicenseCodecTryValidate(Key, StoredUser, Utc, Err) then
   begin
     GLastCheckError := Err;
-    if LicenseCodecTryDecodePayload(Key, Payload, Err) and
-       (LicenseCodecIsExpired(Payload, Utc) or not Payload.Active) then
+    // Only wipe stored keys when the payload itself is expired/deactivated — not on
+    // transient network/signature glitches.
+    if LicenseCodecIsExpired(Payload, Utc) or not Payload.Active then
       LicenseStoreClear;
     Exit;
   end;
@@ -113,21 +139,46 @@ function LicenseTryActivate(const LicenseKey, ForumUsername: string; out ErrorMs
 var
   User, Err: string;
   Utc: TDateTime;
+  Payload: TLicensePayload;
+  IsLifetime: Boolean;
 begin
   ErrorMsg := '';
   GLastCheckError := '';
 
-  if not TryFetchUtcNow(Utc, Err) then
-  begin
-    ErrorMsg := Err;
-    Exit(False);
-  end;
-
-  if not LicenseCodecTryValidate(LicenseKey, ForumUsername, Utc, ErrorMsg) then
+  // Decode offline to learn whether this is a lifetime key.
+  if not LicenseCodecTryDecodePayload(LicenseKey, Payload, ErrorMsg) then
   begin
     if ErrorMsg = '' then
       ErrorMsg := 'License key is invalid.';
     Exit(False);
+  end;
+  IsLifetime := Payload.Lifetime;
+
+  if IsLifetime then
+  begin
+    // Lifetime: validate offline. Activation no longer depends on a public time server,
+    // so pressing Activate can never freeze on a dead HTTP endpoint.
+    Utc := Now;
+    if not LicenseCodecTryValidate(LicenseKey, ForumUsername, Utc, ErrorMsg) then
+    begin
+      if ErrorMsg = '' then
+        ErrorMsg := 'License key is invalid.';
+      Exit(False);
+    end;
+  end
+  else
+  begin
+    if not TryFetchUtcNow(Utc, Err) then
+    begin
+      ErrorMsg := Err;
+      Exit(False);
+    end;
+    if not LicenseCodecTryValidate(LicenseKey, ForumUsername, Utc, ErrorMsg) then
+    begin
+      if ErrorMsg = '' then
+        ErrorMsg := 'License key is invalid.';
+      Exit(False);
+    end;
   end;
 
   User := LicenseNormalizeUsername(ForumUsername);
@@ -145,8 +196,12 @@ begin
     Exit(False);
   end;
 
-  LicenseMonitorNoteOnlineSuccess(Utc);
-  LicenseMonitorPersistAnchor(Utc, User, Trim(LicenseKey));
+  // Persist the offline-grace anchor only for time-limited keys (lifetime never needs it).
+  if not IsLifetime then
+  begin
+    LicenseMonitorNoteOnlineSuccess(Utc);
+    LicenseMonitorPersistAnchor(Utc, User, Trim(LicenseKey));
+  end;
   Result := True;
 end;
 

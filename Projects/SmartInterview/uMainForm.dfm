@@ -3,7 +3,7 @@ object MainForm: TMainForm
   Top = 0
   Caption = 'SmartInterview'
   ClientHeight = 480
-  ClientWidth = 431
+  ClientWidth = 430
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -19,28 +19,29 @@ object MainForm: TMainForm
   object pnlTitleBar: TPanel
     Left = 0
     Top = 0
-    Width = 431
+    Width = 430
     Height = 40
     Align = alTop
     BevelOuter = bvNone
+    ParentBackground = False
     TabOrder = 0
     object pnlIndicators: TPanel
       Left = 0
       Top = 0
-      Width = 72
+      Width = 89
       Height = 40
       Align = alLeft
       BevelOuter = bvNone
       TabOrder = 1
       object pbWaveform: TPaintBox
-        Left = 4
-        Top = 10
+        Left = 17
+        Top = 6
         Width = 32
-        Height = 20
+        Height = 28
         OnPaint = pbWaveformPaint
       end
       object pbMic: TPaintBox
-        Left = 40
+        Left = 47
         Top = 6
         Width = 28
         Height = 28
@@ -48,17 +49,15 @@ object MainForm: TMainForm
       end
     end
     object pnlTitleButtons: TPanel
-      Left = 72
+      Left = 89
       Top = 0
-      Width = 359
+      Width = 340
       Height = 40
       Align = alClient
       BevelOuter = bvNone
       TabOrder = 0
-      ExplicitLeft = 74
-      ExplicitTop = -6
       object btnPin: TSpeedButton
-        Left = 251
+        Left = 304
         Top = 0
         Width = 36
         Height = 40
@@ -76,7 +75,7 @@ object MainForm: TMainForm
         ExplicitLeft = 216
       end
       object btnMenu: TSpeedButton
-        Left = 215
+        Left = 268
         Top = 0
         Width = 36
         Height = 40
@@ -94,7 +93,7 @@ object MainForm: TMainForm
         ExplicitLeft = 180
       end
       object btnOpDn: TSpeedButton
-        Left = 179
+        Left = 232
         Top = 0
         Width = 36
         Height = 40
@@ -112,7 +111,7 @@ object MainForm: TMainForm
         ExplicitLeft = 144
       end
       object btnOpUp: TSpeedButton
-        Left = 143
+        Left = 196
         Top = 0
         Width = 36
         Height = 40
@@ -130,7 +129,7 @@ object MainForm: TMainForm
         ExplicitLeft = 108
       end
       object btnNew: TSpeedButton
-        Left = 107
+        Left = 144
         Top = 0
         Width = 52
         Height = 40
@@ -148,7 +147,7 @@ object MainForm: TMainForm
         ExplicitLeft = 72
       end
       object btnAuto: TSpeedButton
-        Left = 71
+        Left = 108
         Top = 0
         Width = 36
         Height = 40
@@ -166,7 +165,7 @@ object MainForm: TMainForm
         ExplicitLeft = 36
       end
       object btnSetup: TSpeedButton
-        Left = 35
+        Left = 72
         Top = 0
         Width = 36
         Height = 40
@@ -188,82 +187,97 @@ object MainForm: TMainForm
   object pnlBody: TPanel
     Left = 0
     Top = 40
-    Width = 431
-    Height = 400
+    Width = 430
+    Height = 412
     Align = alClient
     BevelOuter = bvNone
-    Padding.Left = 14
+    Color = clBtnFace
+    Padding.Left = 16
     Padding.Top = 8
-    Padding.Right = 14
-    Padding.Bottom = 14
+    Padding.Right = 16
+    Padding.Bottom = 8
+    ParentBackground = False
     TabOrder = 1
     object lblHeard: TLabel
       Left = 16
-      Top = 12
-      Width = 43
-      Height = 12
+      Top = 8
+      Width = 398
+      Height = 15
+      Align = alTop
       Caption = 'HEARING'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clGrayText
-      Font.Height = -10
-      Font.Name = 'Segoe UI Semibold'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object lblAnswer: TLabel
-      Left = 16
-      Top = 116
-      Width = 48
-      Height = 12
-      Caption = 'RESPONSE'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -10
+      Font.Height = -12
       Font.Name = 'Segoe UI Semibold'
       Font.Style = [fsBold]
       ParentFont = False
     end
     object txtTranscript: TMemo
       Left = 16
-      Top = 32
-      Width = 388
-      Height = 76
+      Top = 23
+      Width = 398
+      Height = 72
+      Align = alTop
+      Color = clWindow
+      ParentColor = False
       ReadOnly = True
-      ScrollBars = ssVertical
+      ScrollBars = ssNone
       TabOrder = 0
+    end
+    object lblAnswer: TLabel
+      Left = 16
+      Top = 95
+      Width = 398
+      Height = 15
+      Align = alTop
+      Caption = 'RESPONSE'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -12
+      Font.Name = 'Segoe UI Semibold'
+      Font.Style = [fsBold]
+      ParentFont = False
     end
     object rtbResponse: TRichEdit
       Left = 16
-      Top = 136
-      Width = 388
-      Height = 248
+      Top = 110
+      Width = 398
+      Height = 294
+      Align = alClient
+      Color = clWindow
       Font.Charset = ANSI_CHARSET
       Font.Color = clWindowText
       Font.Height = -12
       Font.Name = 'Segoe UI'
       Font.Style = []
+      ParentColor = False
       ParentFont = False
       ReadOnly = True
-      ScrollBars = ssVertical
+      ScrollBars = ssNone
       TabOrder = 1
     end
   end
-  object pnlBottom: TPanel
+  object pnlStatus: TPanel
     Left = 0
-    Top = 440
-    Width = 431
-    Height = 40
+    Top = 452
+    Width = 430
+    Height = 28
     Align = alBottom
     BevelOuter = bvNone
+    Color = clBtnFace
+    ParentBackground = False
     TabOrder = 2
     object lblStatusBar: TLabel
-      Left = 0
+      Left = 16
       Top = 0
-      Width = 3
-      Height = 15
+      Width = 398
+      Height = 28
       Align = alClient
-      Alignment = taCenter
+      Alignment = taLeftJustify
+      Caption = 'Ready'
       Layout = tlCenter
+      ExplicitWidth = 34
+      ExplicitHeight = 15
     end
   end
   object mnuMain: TPopupMenu
@@ -428,8 +442,56 @@ object MainForm: TMainForm
         Caption = 'Automatic mode settings...'
         OnClick = miAutoCfgClick
       end
+      object miMicCfg: TMenuItem
+        Caption = 'Microphone settings...'
+        OnClick = miMicCfgClick
+      end
+      object miScroll: TMenuItem
+        Caption = 'Response scroll'
+        object miScrollOff: TMenuItem
+          Caption = 'Off'
+          OnClick = miScrollClick
+        end
+        object miScrollAuto: TMenuItem
+          Caption = 'Automatic (word by word)'
+          Checked = True
+          OnClick = miScrollClick
+        end
+        object miScrollVoice: TMenuItem
+          Caption = 'Voice (follows your reading)'
+          OnClick = miScrollClick
+        end
+        object miScrollSep: TMenuItem
+          Caption = '-'
+        end
+        object miSpeed: TMenuItem
+          Caption = 'Speed (Auto)'
+          object miSpeedVSlow: TMenuItem
+            Caption = 'Very slow'
+            OnClick = miSpeedClick
+          end
+          object miSpeedSlow: TMenuItem
+            Caption = 'Slow'
+            OnClick = miSpeedClick
+          end
+          object miSpeedMed: TMenuItem
+            Caption = 'Medium'
+            Checked = True
+            OnClick = miSpeedClick
+          end
+          object miSpeedFast: TMenuItem
+            Caption = 'Fast'
+            OnClick = miSpeedClick
+          end
+          object miSpeedVFast: TMenuItem
+            Caption = 'Very fast'
+            OnClick = miSpeedClick
+          end
+        end
+      end
       object miAudio: TMenuItem
         Caption = 'Audio'
+        Visible = False
         object miMicMenu: TMenuItem
           Caption = 'Microphone'
           object miMicDefault: TMenuItem
@@ -502,49 +564,6 @@ object MainForm: TMainForm
           Caption = 'Use microphone (with Ctrl)'
           Checked = True
           OnClick = miUseMicClick
-        end
-        object miScroll: TMenuItem
-          Caption = 'Response scroll'
-          object miScrollOff: TMenuItem
-            Caption = 'Off'
-            OnClick = miScrollClick
-          end
-          object miScrollAuto: TMenuItem
-            Caption = 'Automatic (word by word)'
-            Checked = True
-            OnClick = miScrollClick
-          end
-          object miScrollVoice: TMenuItem
-            Caption = 'Voice (follows your reading)'
-            OnClick = miScrollClick
-          end
-          object miScrollSep: TMenuItem
-            Caption = '-'
-          end
-          object miSpeed: TMenuItem
-            Caption = 'Speed (Auto)'
-            object miSpeedVSlow: TMenuItem
-              Caption = 'Very slow'
-              OnClick = miSpeedClick
-            end
-            object miSpeedSlow: TMenuItem
-              Caption = 'Slow'
-              OnClick = miSpeedClick
-            end
-            object miSpeedMed: TMenuItem
-              Caption = 'Medium'
-              Checked = True
-              OnClick = miSpeedClick
-            end
-            object miSpeedFast: TMenuItem
-              Caption = 'Fast'
-              OnClick = miSpeedClick
-            end
-            object miSpeedVFast: TMenuItem
-              Caption = 'Very fast'
-              OnClick = miSpeedClick
-            end
-          end
         end
       end
     end

@@ -39,12 +39,12 @@ SmartInterview_Delphi/
 │   │   ├── uMainForm.*             # Overlay colloquio
 │   │   ├── uFrm*.pas               # Form (licenza, splash, settings, …)
 │   │   └── src/                    # Unità Delphi (audio, bridge engine, settings)
-│   └── LicenseManager/             # Tool generazione licenze
+│   ├── LicenseManager/             # Tool generazione licenze (genera anche le chiavi di firma)
+│   └── Engine/                     # Motore C# (.NET 10)
+│       ├── Program.cs              # Entry point JSON stdin/stdout
+│       ├── SmartInterview.Engine.csproj
+│       └── *.cs
 ├── Common/                         # Unità Pascal condivise (es. uLicenseCodec)
-├── Engine/                         # Motore C# (.NET 10)
-│   ├── Program.cs                  # Entry point JSON stdin/stdout
-│   ├── SmartInterview.Engine.csproj
-│   └── *.cs
 ├── docs/                           # Documentazione dettagliata
 └── README.md                       # Questo file
 ```
@@ -115,7 +115,7 @@ Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazi
 Build manuale engine:
 
 ```powershell
-dotnet build Engine\SmartInterview.Engine.csproj -c Release
+dotnet build Projects\Engine\SmartInterview.Engine.csproj -c Release
 ```
 
 Guida completa: [docs/setup.md](docs/setup.md).
@@ -154,7 +154,7 @@ Salvate nel registry `HKCU\Software\SmartInterview` (`uRegistryStore.pas`):
 - **Gate licenza:** variabili `SMARTINTERVIEW_SESSION`, `SMARTINTERVIEW_LICENSE`, `SMARTINTERVIEW_USER` + validazione in `EngineSessionAuth.cs`.
 - **Memoria conversazione:** RAM in `LocalLlmClient.cs`; baseline tokens esclusi dalla % contesto UI.
 - **Manuale vs auto:** la cattura manuale risponde sempre; l'auto usa `classify_utterance` + marker `[[SKIP]]`.
-- **Nuovo comando IPC:** handler in `Engine/Program.cs` → wrapper `uPipeEngine.pas` → caller `uMainForm.pas`.
+- **Nuovo comando IPC:** handler in `Projects/Engine/Program.cs` → wrapper `uPipeEngine.pas` → caller `uMainForm.pas`.
 - **Unità condivise:** mettere in `Common/`, non duplicare tra progetti.
 - **Diagnostica trascrizione:** `%LOCALAPPDATA%\SmartInterview\live-transcribe-diag.log`.
 

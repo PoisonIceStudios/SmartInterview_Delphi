@@ -168,10 +168,19 @@ type
     cbSize: Word;
   end;
   PWaveFormatEx = ^TWaveFormatEx;
+  PWaveFormatExtensible = ^TWaveFormatExtensible;
+  TWaveFormatExtensible = packed record
+    Format: TWaveFormatEx;
+    Samples: Word;
+    ChannelMask: DWORD;
+    SubFormat: TGUID;
+  end;
 
 const
   WAVE_FORMAT_IEEE_FLOAT = $0003;
   WAVE_FORMAT_PCM = 1;
+  WAVE_FORMAT_EXTENSIBLE = $FFFE;
+  KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: TGUID = '{00000003-0000-0010-8000-00AA00389B71}';
   DEVICE_STATE_ACTIVE = 1;
   STGM_READ = $00000000;
   VT_LPWSTR = 31;
@@ -206,6 +215,22 @@ begin
     if PropValue.pwszVal <> nil then
       Result := string(PropValue.pwszVal);
     CoTaskMemFree(PropValue.pwszVal);
+  end;
+end;
+
+function WaveFormatUsesFloat(const Format: PWaveFormatEx): Boolean;
+var
+  Ext: PWaveFormatExtensible;
+begin
+  Result := False;
+  if Format = nil then
+    Exit;
+  if Format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT then
+    Exit(True);
+  if Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE then
+  begin
+    Ext := PWaveFormatExtensible(Format);
+    Result := IsEqualGUID(Ext.SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
   end;
 end;
 
@@ -614,7 +639,7 @@ begin
     FSampleRate := Format.nSamplesPerSec;
     FChannels := Format.nChannels;
     FBytesPerSample := Format.wBitsPerSample div 8;
-    FIsFloat := Format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+    FIsFloat := WaveFormatUsesFloat(Format);
     EventHandle := CreateEvent(nil, False, False, nil);
     if Failed(Client.Initialize(AUDCLNT_SHAREMODE_SHARED,
       AUDCLNT_STREAMFLAGS_EVENTCALLBACK, WASAPI_BUFFER_DURATION, 0, Format, nil)) then

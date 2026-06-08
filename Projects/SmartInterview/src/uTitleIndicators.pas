@@ -14,8 +14,7 @@ procedure PaintTitleMic(PaintBox: TPaintBox; Active: Boolean);
 implementation
 
 uses
-  Winapi.Windows,
-  uTheme;
+  Winapi.Windows;
 
 const
   GlyphMic = #$E720;
@@ -39,9 +38,9 @@ var
 begin
   Canvas := PaintBox.Canvas;
   if Recording then
-    Col := ThemeIndicatorActive
+    Col := clHighlight
   else
-    Col := ThemeIndicatorIdle;
+    Col := clGray;
   Canvas.Brush.Color := Col;
   Canvas.Brush.Style := bsSolid;
   StartX := (PaintBox.Width - WaveformWidth) div 2;
@@ -64,9 +63,9 @@ var
   R: TRect;
 begin
   if Active then
-    Col := ThemeIndicatorActive
+    Col := clHighlight
   else
-    Col := ThemeIndicatorIdle;
+    Col := clGray;
   with PaintBox.Canvas do
   begin
     Brush.Style := bsClear;

@@ -254,7 +254,13 @@ var
 begin
   Thresh := RegistryGetInt('VadThreshold', -1);
   if Thresh >= 0 then
-    Seg.Threshold := Thresh / 1000 * 0.1;
+  begin
+    // Legacy values (>100) used slider 0..1000 mapped to RMS 0..0.1.
+    if Thresh > 100 then
+      Seg.Threshold := Thresh / 10000.0
+    else
+      Seg.Threshold := Thresh / 1000.0;
+  end;
 
   Silence := RegistryGetInt('VadSilenceMs', -1);
   if Silence >= 200 then
@@ -267,14 +273,14 @@ end;
 
 procedure SaveVad(Seg: TVoiceSegmenter);
 begin
-  RegistrySetInt('VadThreshold', Round(Seg.Threshold / 0.1 * 1000));
+  RegistrySetInt('VadThreshold', Round(Seg.Threshold * 1000));
   RegistrySetInt('VadSilenceMs', Seg.SilenceMs);
   RegistrySetInt('VadMinSpeechMs', Seg.MinSpeechMs);
 end;
 
 procedure SaveVadDefaults;
 begin
-  RegistrySetInt('VadThreshold', Round(TVoiceSegmenter.DefaultThreshold / 0.1 * 1000));
+  RegistrySetInt('VadThreshold', Round(TVoiceSegmenter.DefaultThreshold * 1000));
   RegistrySetInt('VadSilenceMs', TVoiceSegmenter.DefaultSilenceMs);
   RegistrySetInt('VadMinSpeechMs', TVoiceSegmenter.DefaultMinSpeechMs);
 end;

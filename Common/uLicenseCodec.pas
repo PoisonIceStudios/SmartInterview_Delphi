@@ -8,7 +8,7 @@ uses
 const
   LicenseKeyChars = 32;
   LicenseKeyGroups = 8;
-  LicenseMaxUsernameLen = 10;
+  LicenseMaxUsernameLen = 30;
   LicenseFlagActive = $01;
   LicenseFlagLifetime = $02;
 
@@ -144,16 +144,19 @@ begin
     while (Bits >= 5) and (Length(Result) < Chars) do
     begin
       Dec(Bits, 5);
-      Result := Result + Base32Alphabet[(Buffer shr Bits) and $1F];
+      Result := Result + Base32Alphabet[((Buffer shr Bits) and $1F) + 1];
     end;
     if Length(Result) >= Chars then
       Break;
   end;
-  while Length(Result) < Chars do
+  // Flush remaining real bits (Bits is 0..4 here) into a final 5-bit group,
+  // left-aligning them so decode recovers the last byte intact.
+  if (Length(Result) < Chars) and (Bits > 0) then
   begin
-    Buffer := Buffer shl 5;
-    Result := Result + Base32Alphabet[Buffer and $1F];
+    Result := Result + Base32Alphabet[((Buffer shl (5 - Bits)) and $1F) + 1];
   end;
+  while Length(Result) < Chars do
+    Result := Result + Base32Alphabet[1];
 end;
 
 function LicenseCodecDecodeBase32(const Encoded: string; OutBytes: Integer): TBytes;

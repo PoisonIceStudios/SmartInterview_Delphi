@@ -32,7 +32,7 @@ type
     txtTranscript: TMemo;
     lblAnswer: TLabel;
     rtbResponse: TRichEdit;
-    pnlBottom: TPanel;
+    pnlStatus: TPanel;
     lblStatusBar: TLabel;
     mnuMain: TPopupMenu;
     miInterview: TMenuItem;
@@ -73,6 +73,7 @@ type
     miKeyShift: TMenuItem;
     miKeyAlt: TMenuItem;
     miAutoCfg: TMenuItem;
+    miMicCfg: TMenuItem;
     miAudio: TMenuItem;
     miMicMenu: TMenuItem;
     miMicDefault: TMenuItem;
@@ -155,6 +156,7 @@ type
     procedure miTransClick(Sender: TObject);
     procedure miListenKeyClick(Sender: TObject);
     procedure miAutoCfgClick(Sender: TObject);
+    procedure miMicCfgClick(Sender: TObject);
     procedure miUseMicClick(Sender: TObject);
     procedure miMicClick(Sender: TObject);
     procedure miScrollClick(Sender: TObject);
@@ -176,6 +178,7 @@ type
     procedure tmrEngineTimer(Sender: TObject);
     procedure tmrLicenseTimer(Sender: TObject);
     procedure HandleLicensePeriodicResult(const Res: TLicensePeriodicResult; const Msg: string);
+    procedure RestartEngineAfterRelicense;
     procedure pbWaveformPaint(Sender: TObject);
     procedure pbMicPaint(Sender: TObject);
   private
@@ -209,8 +212,12 @@ type
     FHiddenFromCapture: Boolean;
     FMicVoiceTicks: Int64;
     FMicMonitorIgnoreUntil: Int64;
+    FMicThreshold: Single;
+    FMicRmsLast: Single;
+    FMicRmsDisplay: Single;
     FPcVoiceTicks: Int64;
     FRespColor: TColor;
+    FReadDoneColor: TColor;
     FReadPos: Double;
     FConfirmedChar: Double;
     FPrevConfirmChar: Double;
@@ -239,7 +246,6 @@ type
     FListenFinalSession: Integer;
     FLastLivePreview: string;
     FSettingsMonitoring: Boolean;
-    FSettingsForm: TFrmSettings;
     function StripNoiseTokens(const Text: string): string;
     function CleanTranscriptText(const Text: string): string;
     procedure WaitLiveBusyIdle(TimeoutMs: Cardinal);
@@ -248,7 +254,6 @@ type
     function NormalizeQuestionKey(const Text: string): string;
     function IsDuplicateAutoQuestion(const Text: string): Boolean;
     procedure HandleStreamToken(Sender: TObject; const Token: string);
-    procedure StyleForm;
     function IsWaveRecording: Boolean;
     function IsMicActive: Boolean;
     procedure StyleIndicatorPaintBoxes;
@@ -281,7 +286,6 @@ type
     procedure RefreshIntelligenceMenu;
     procedure RefreshTranscriptionMenu;
     procedure SyncMenuFromSettings;
-    procedure UpdateListeningKeyUi;
     procedure OnEngineProgress(Sender: TObject; const Phase: string; Progress: Double);
     function TranscribeAsync(const Samples: TArray<Single>; out Text: string): Boolean;
     function WhisperTierDiagLabel: string;
@@ -296,10 +300,18 @@ type
     procedure StopReadAlong;
     procedure StartSettingsMonitor;
     procedure StopSettingsMonitor;
+    procedure SetUseMicEnabled(Value: Boolean);
+    procedure SetListeningKeyChoice(const Key: TListeningKey);
     procedure RebuildMicMenu;
     function HasMinimalAutoSpeech(const Text: string): Boolean;
     function ClassifyUtteranceAsync(const Text: string; out Answerable: Boolean): Boolean;
     function IsUsefulTranscript(const Text: string): Boolean;
+    function CountRealWords(const Text: string): Integer;
+    function IsLikelyNoiseHallucination(const Text: string): Boolean;
+    function ShouldShowHearingPreview(const Text: string): Boolean;
+    function ShouldCommitHearing(const Text: string): Boolean;
+    function LoadMicThresholdFromRegistry: Single;
+    function ManualSpeechThreshold: Single;
     function SanitizeAnswer(const S: string): string;
     function ResponsePlainText: string;
     function ResponseHasText: Boolean;
@@ -323,8 +335,8 @@ implementation
 
 uses
   System.IOUtils,
-  uFrmProfile, uFrmAbout, uFrmInterviewSetup, uFrmLicense,
-  uTheme, uAppStartup, uRichEditFmt, uDebugLog, uLicenseService;
+  uFrmProfile, uFrmAbout, uFrmInterviewSetup, uFrmLicense, uFrmMicSettings,
+  uDialogZOrder, uAppStartup, uRichEditFmt, uDebugLog, uLicenseService;
 
 const
   SkipMarker = '[[SKIP]]';
@@ -349,7 +361,8 @@ const
   HTCAPTION = 2;
   LWA_ALPHA = $2;
   MicMonitorWarmupMs = 2000;
-  MicActiveThreshold = 0.028;
+  MicDefaultThreshold = 0.500;  // slider default 500/1000 — filters mic noise that triggers Whisper hallucinations
+  MicMeterMaxStep = 0.06;       // ignore single-buffer spikes on the level meter
   MicActiveHoldMs = 250;
 
   // Segoe MDL2 Assets - pin toggles in UpdatePinVisual
@@ -440,6 +453,8 @@ begin
   Show := CleanTranscriptText(Text);
   if Show.IsEmpty then
     Exit;
+  if not ShouldShowHearingPreview(Show) then
+    Exit;
   Tag := DiagTag;
   UiInvoke(procedure
   begin
@@ -494,34 +509,9 @@ begin
   Params.ExStyle := Params.ExStyle or WS_EX_LAYERED;
 end;
 
-procedure TMainForm.StyleForm;
+function TMainForm.ResponsePlainText: string;
 begin
-  Color := ThemeBase;
-  Font.Name := ThemeFontFamily;
-  Font.Color := ThemeText;
-  pnlTitleBar.Color := ThemeTitleBar;
-  pnlIndicators.Color := ThemeTitleBar;
-  pnlTitleButtons.Color := ThemeTitleBar;
-  pnlBody.Color := ThemeBase;
-  pnlBottom.Color := ThemeBase;
-  lblHeard.Font.Color := ThemeTextDim;
-  lblAnswer.Font.Color := ThemeAccent;
-  lblStatusBar.Font.Color := ThemeTextDim;
-  StyleInput(txtTranscript);
-  StyleInput(rtbResponse);
-  FRespColor := ThemeResponseText;
-  rtbResponse.Color := ThemeSurface;
-  rtbResponse.Font.Color := FRespColor;
-  rtbResponse.HideSelection := True;
-  txtTranscript.HideSelection := True;
-  StyleTitleBarButton(btnPin);
-  StyleTitleBarButton(btnMenu);
-  StyleTitleBarButton(btnOpDn);
-  StyleTitleBarButton(btnOpUp);
-  StyleTitleBarButton(btnNew);
-  btnNew.Width := NewChatButtonWidth;
-  StyleTitleBarButton(btnAuto);
-  StyleTitleBarButton(btnSetup);
+  Result := rtbResponse.Lines.Text;
 end;
 
 procedure TMainForm.ApplyOpacity;
@@ -548,12 +538,6 @@ begin
     ConvBudget := 1;
 
   btnNew.Caption := GlyphNewChat + Format('   %d%%', [Pct]);
-  if Pct >= 95 then
-    btnNew.Font.Color := ThemeColor(235, 90, 90)
-  else if Pct >= 80 then
-    btnNew.Font.Color := ThemeWarn
-  else
-    btnNew.Font.Color := ThemeText;
   btnNew.Hint := Format(
     'New session (resets chat). Conversation memory: %d / %d tokens (%d%%). ' +
     'System prompt and profile are not counted.',
@@ -700,7 +684,7 @@ begin
   FListeningKey := ListeningKeyLoadSaved;
   FScrollMode := smAuto;
   FAutoSpeed := 26;
-  FUseMic := True;
+  FUseMic := RegistryGetInt('UseMic', 1) <> 0;
   FHiddenFromCapture := not ParamHasShowFlag;
   FEnginePingFails := 0;
   FEnginePingBusy := False;
@@ -708,22 +692,27 @@ begin
   FLicenseTimer := TTimer.Create(Self);
   FLicenseTimer.Interval := 30 * 60 * 1000;
   FLicenseTimer.OnTimer := tmrLicenseTimer;
-  FLicenseTimer.Enabled := True;
+  FLicenseTimer.Enabled := False;
+  LicenseMonitorPrimeFromStore(LicenseStoreGetForumUsername, LicenseStoreGet);
   FReady := True;
   FModelBusy := False;
   FModelLock := TCriticalSection.Create;
   FShuttingDown := False;
   FSettingsMonitoring := False;
-  FSettingsForm := nil;
   ShowInTaskbar := not FHiddenFromCapture;
   pnlTitleBar.OnMouseDown := TitleBarMouseDown;
   pnlIndicators.OnMouseDown := TitleBarMouseDown;
+  pnlStatus.OnMouseDown := TitleBarMouseDown;
   lblStatusBar.OnMouseDown := TitleBarMouseDown;
   AlphaBlend := True;
   AlphaBlendValue := 255;
   FormStyle := fsStayOnTop;
   FMicVoiceTicks := 0;
   FMicMonitorIgnoreUntil := 0;
+  FMicThreshold := LoadMicThresholdFromRegistry;
+  FAudio.MicSpeechThreshold := FMicThreshold;
+  FMicRmsLast := 0;
+  FMicRmsDisplay := 0;
   ApplyVadTo(FSegmenter);
   FHook.SetListeningKey(FListeningKey);
   FHook.OnListeningKeyPressed := HookListeningKeyPressed;
@@ -737,7 +726,11 @@ begin
   FSegmenter.OnSpeechProgress := OnAutoProgress;
   FSegmenter.OnSegmentReady := OnAutoSegment;
   StyleIndicatorPaintBoxes;
-  StyleForm;
+  FRespColor := clWindowText;
+  FReadDoneColor := clGrayText;
+  rtbResponse.HideSelection := True;
+  txtTranscript.HideSelection := True;
+  btnNew.Width := NewChatButtonWidth;
   InitTrayIcon;
   UpdateSetupVisual;
   RefreshIntelligenceMenu;
@@ -799,9 +792,17 @@ begin
   tmrIcon.Enabled := True;
   tmrEngine.Enabled := True;
   if rtbResponse.HandleAllocated then
+  begin
+    ShowScrollBar(rtbResponse.Handle, SB_VERT, False);
+    ShowScrollBar(rtbResponse.Handle, SB_HORZ, False);
     RichEditHideCaret(rtbResponse);
+  end;
   if txtTranscript.HandleAllocated then
+  begin
+    ShowScrollBar(txtTranscript.Handle, SB_VERT, False);
+    ShowScrollBar(txtTranscript.Handle, SB_HORZ, False);
     ControlHideCaret(txtTranscript);
+  end;
   try
     FHook.Start;
   except
@@ -811,6 +812,7 @@ begin
   SetActionsEnabled(True);
   ShowGpuLoadStatus;
   RefreshContextIndicator;
+  FLicenseTimer.Enabled := True;
 end;
 
 procedure TMainForm.OnEngineProgress(Sender: TObject; const Phase: string; Progress: Double);
@@ -945,6 +947,16 @@ begin
           SetStatus('Hold ' + ListeningKeyDisplayName(FListeningKey) + ' a little longer while speaking.');
           Exit;
         end;
+        // Trim silent edges and bail out if there is no real speech: feeding silence to
+        // Whisper is what makes it hallucinate phrases like "Grazie".
+        LocalSnap := AudioTrimSilence(LocalSnap, ManualSpeechThreshold);
+        if (Length(LocalSnap) < LiveMinPreviewSamples) or
+           not AudioHasSpeech(LocalSnap, ManualSpeechThreshold) then
+        begin
+          LiveTransDiagWrite('FINAL skip no-speech');
+          SetStatus('No speech detected. Try again (' + ListeningKeyHoldHint(FListeningKey) + ').');
+          Exit;
+        end;
         if not TranscribeAsync(LocalSnap, Text) or Text.Trim.IsEmpty then
         begin
           LiveTransDiagWrite('FINAL empty or failed');
@@ -956,16 +968,17 @@ begin
         LiveTransDiagWrite('HEARING was="' + LiveTransDiagSanitize(LocalPreview) + '"');
         LiveTransDiagWrite(Format('DIFF hearing_len=%d final_len=%d',
           [Length(LocalPreview), Length(Text)]));
+        if not ShouldCommitHearing(Text) then
+        begin
+          LiveTransDiagWrite('FINAL skip noise/hallucination');
+          SetStatus('No speech detected. Try again (' + ListeningKeyHoldHint(FListeningKey) + ').');
+          Exit;
+        end;
         SetTranscript(Text);
         UiInvoke(procedure
         begin
           FLastLivePreview := Text;
         end);
-        if not IsUsefulTranscript(Text) then
-        begin
-          SetStatus('No speech detected. Try again (' + ListeningKeyHoldHint(FListeningKey) + ').');
-          Exit;
-        end;
         SetStatus('Answering...');
         PrepareResponseForStreaming;
         // Manual capture: the user pressed the key on purpose, so a question was
@@ -1073,8 +1086,21 @@ begin
           LiveTransDiagWrite(Format('LIVE skip need>=%d samples', [LiveMinPreviewSamples]));
           Exit;
         end;
+        Snap := AudioTrimSilence(Snap, ManualSpeechThreshold);
+        if (Length(Snap) < LiveMinPreviewSamples) or
+           not AudioHasSpeech(Snap, ManualSpeechThreshold) then
+        begin
+          LiveTransDiagWrite('LIVE skip no-speech');
+          Exit;
+        end;
         if not TranscribeAsync(Snap, Text) or not FListening or (Session <> FListenSession) then
           Exit;
+        Text := CleanTranscriptText(Text);
+        if Text.IsEmpty or not ShouldShowHearingPreview(Text) then
+        begin
+          LiveTransDiagWrite('LIVE skip noise/hallucination');
+          Exit;
+        end;
         ApplyLivePreview(Text, 'LIVE hearing');
       except
         on E: Exception do
@@ -1276,18 +1302,69 @@ end;
 
 procedure TMainForm.OnMicMonitor(const Samples: TArray<Single>);
 var
-  I: Integer;
-  Sum: Double;
-  Rms: Single;
+  I, N: Integer;
+  Mean, SumSq: Double;
+  Rms, V, Peak, AbsV: Single;
 begin
+  N := Length(Samples);
+  if N = 0 then
+    Exit;
+  Mean := 0;
+  for I := 0 to N - 1 do
+    Mean := Mean + Samples[I];
+  Mean := Mean / N;
+  SumSq := 0;
+  Peak := 0;
+  for I := 0 to N - 1 do
+  begin
+    V := Samples[I] - Single(Mean);
+    AbsV := Abs(V);
+    if AbsV > Peak then
+      Peak := AbsV;
+    SumSq := SumSq + V * V;
+  end;
+  Rms := Sqrt(SumSq / N);
+  if (Peak > 1.05) or IsNan(Rms) or IsInfinite(Rms) then
+    Exit;
+  if Rms > 1.0 then
+    Rms := 1.0;
+  // Reject single-buffer spikes (format glitches / driver hiccups).
+  if Rms > FMicRmsDisplay + MicMeterMaxStep then
+    Rms := FMicRmsDisplay + MicMeterMaxStep;
+  // Meter: fast rise, slow fall so the bar tracks speech naturally.
+  if Rms > FMicRmsDisplay then
+    FMicRmsDisplay := Rms
+  else
+    FMicRmsDisplay := FMicRmsDisplay * 0.90 + Rms * 0.10;
+  FMicRmsLast := FMicRmsDisplay;
   if Int64(GetTickCount64) < FMicMonitorIgnoreUntil then
     Exit;
-  Sum := 0;
-  for I := 0 to High(Samples) do
-    Sum := Sum + Samples[I] * Samples[I];
-  Rms := Sqrt(Sum / Max(1, Length(Samples)));
-  if Rms > MicActiveThreshold then
+  if Rms > FMicThreshold then
     FMicVoiceTicks := Int64(GetTickCount64);
+end;
+
+function TMainForm.ManualSpeechThreshold: Single;
+begin
+  if FUseMic then
+    Result := FMicThreshold
+  else
+    Result := -1;
+end;
+
+function TMainForm.LoadMicThresholdFromRegistry: Single;
+var
+  Raw: Integer;
+begin
+  Result := MicDefaultThreshold;
+  Raw := RegistryGetInt('MicThreshold', -1);
+  if Raw < 0 then
+    Exit;
+  if Raw > 100 then
+    Result := Raw / 10000.0
+  else
+    Result := Raw / 1000.0;
+  if Result > 1.0 then
+    Result := 1.0;
 end;
 
 procedure TMainForm.StyleIndicatorPaintBoxes;
@@ -1303,6 +1380,10 @@ end;
 
 function TMainForm.IsMicActive: Boolean;
 begin
+  // In automatic mode the microphone is disabled (the app listens to PC audio only),
+  // so the indicator must stay off regardless of ambient noise.
+  if FAutoMode then
+    Exit(False);
   if FMicVoiceTicks = 0 then
     Exit(False);
   if Int64(GetTickCount64) < FMicMonitorIgnoreUntil then
@@ -1321,6 +1402,8 @@ procedure TMainForm.StartMicMonitor;
 begin
   FMicMonitor.Stop;
   FMicVoiceTicks := 0;
+  FMicRmsDisplay := 0;
+  FMicRmsLast := 0;
   FMicMonitorIgnoreUntil := Int64(GetTickCount64) + MicMonitorWarmupMs;
   pbMic.Visible := FMicMonitor.Start;
   RefreshIndicators;
@@ -1355,8 +1438,8 @@ begin
   if FModelBusy or not FReady then Exit;
   FAutoMode := On;
   UpdateAutoVisual;
-  if FSettingsForm <> nil then
-    FSettingsForm.SyncAutoMode(On);
+  if FrmSettings.Visible then
+    FrmSettings.SyncAutoMode(On);
   if On then
   begin
     if FListening then
@@ -1397,7 +1480,7 @@ begin
       FAudio.StopCapture;
     except
     end;
-    if (FSettingsForm <> nil) and FSettingsForm.Visible then
+    if FrmSettings.Visible then
       StartSettingsMonitor
     else if not FListening then
       StartMicMonitor;
@@ -1432,13 +1515,33 @@ begin
   miTransMax.Checked := FTranscription = tiMax;
   miTopmost.Checked := FormStyle = fsStayOnTop;
   miHideCapture.Checked := FHiddenFromCapture;
-  miUseMic.Checked := FUseMic;
-  UpdateListeningKeyUi;
 end;
 
-procedure TMainForm.UpdateListeningKeyUi;
+procedure TMainForm.SetUseMicEnabled(Value: Boolean);
 begin
-  miUseMic.Caption := 'Use microphone (with ' + ListeningKeyDisplayName(FListeningKey) + ')';
+  if FUseMic = Value then
+    Exit;
+  FUseMic := Value;
+  RegistrySetInt('UseMic', Ord(FUseMic));
+  if FListening and FAudio.IsCapturing then
+  begin
+    try
+      FAudio.StopCapture;
+      FAudio.Start(FUseMic);
+    except
+      on E: Exception do
+        SetStatus('Audio: ' + E.Message);
+    end;
+  end;
+end;
+
+procedure TMainForm.SetListeningKeyChoice(const Key: TListeningKey);
+begin
+  if FListeningKey = Key then
+    Exit;
+  FListeningKey := Key;
+  FHook.SetListeningKey(FListeningKey);
+  RegistrySetInt('ListeningKey', Ord(FListeningKey));
 end;
 
 procedure TMainForm.RefreshIntelligenceMenu;
@@ -1521,39 +1624,20 @@ end;
 
 procedure TMainForm.UpdateAutoVisual;
 begin
-  if FAutoMode then
-  begin
-    btnAuto.Font.Color := ThemeResponseText;
-    btnAuto.Font.Style := [];
-  end
-  else
-  begin
-    btnAuto.Font.Color := ThemeText;
-    btnAuto.Font.Style := [];
-  end;
+  btnAuto.Down := FAutoMode;
 end;
 
 procedure TMainForm.UpdateSetupVisual;
 begin
-  if FProfile.HasContent then
-    btnSetup.Font.Color := ThemeAccent
-  else
-    btnSetup.Font.Color := ThemeText;
 end;
 
 procedure TMainForm.UpdatePinVisual;
 begin
   miTopmost.Checked := FormStyle = fsStayOnTop;
   if FormStyle = fsStayOnTop then
-  begin
-    btnPin.Caption := GlyphPin;
-    btnPin.Font.Color := ThemeResponseText;
-  end
+    btnPin.Caption := GlyphPin
   else
-  begin
     btnPin.Caption := GlyphPinUp;
-    btnPin.Font.Color := ThemeText;
-  end;
 end;
 
 procedure TMainForm.OnAutoSpeechStarted;
@@ -1578,9 +1662,14 @@ begin
     Text: string;
   begin
     try
-      if (Length(SegCopy) = 0) or not TranscribeAsync(SegCopy, Text) or not FAutoMode or Text.Trim.IsEmpty then
+      SegCopy := AudioTrimSilence(SegCopy);
+      if (Length(SegCopy) = 0) or not AudioHasSpeech(SegCopy) then
+        Exit;
+      if not TranscribeAsync(SegCopy, Text) or not FAutoMode or Text.Trim.IsEmpty then
         Exit;
       Text := CleanTranscriptText(Text);
+      if not ShouldShowHearingPreview(Text) then
+        Exit;
       ApplyLivePreview(Text, 'AUTO hearing');
     finally
       FAutoBusy := False;
@@ -1609,7 +1698,10 @@ begin
       try
         if FShuttingDown then
           Exit;
-        if (Length(SegLocal) = 0) or not TranscribeAsync(SegLocal, Text) then
+        SegLocal := AudioTrimSilence(SegLocal);
+        if (Length(SegLocal) = 0) or not AudioHasSpeech(SegLocal) then
+          Exit;
+        if not TranscribeAsync(SegLocal, Text) then
           Exit;
         Text := CleanTranscriptText(Text);
         LiveTransDiagWrite('AUTO SEGMENT FINAL text="' + LiveTransDiagSanitize(Text) + '"');
@@ -1618,7 +1710,6 @@ begin
           SetStatus('');
           Exit;
         end;
-        SetTranscript(Text);
         FEngine.CancelGeneration;
         SetStatus('Checking...');
         if not ClassifyUtteranceAsync(Text, Answerable) then
@@ -1633,6 +1724,12 @@ begin
           SetStatus('');
           Exit;
         end;
+        if not ShouldCommitHearing(Text) then
+        begin
+          SetStatus('');
+          Exit;
+        end;
+        SetTranscript(Text);
         SetStatus('Answering... (auto)');
         Inc(FAutoAnswerGen);
         AnswerGen := FAutoAnswerGen;
@@ -1681,24 +1778,62 @@ end;
 function TMainForm.IsUsefulTranscript(const Text: string): Boolean;
 var
   Cleaned: string;
-  Words: TArray<string>;
-  I, RealWords: Integer;
 begin
-  if Text.Trim.IsEmpty then Exit(False);
+  Result := CountRealWords(Text) >= 3;
+  if not Result then
+    Exit;
   Cleaned := StripNoiseTokens(Text);
-  if Cleaned.IsEmpty then Exit(False);
-  Words := Cleaned.Split([' ', #9, #10, #13, ',', '.', '!', '?', ';', ':'],
-    TStringSplitOptions.ExcludeEmpty);
-  RealWords := 0;
-  for I := 0 to High(Words) do
-    if Length(Words[I]) >= 2 then
-      Inc(RealWords);
-  Result := RealWords >= 3;
+  Result := not Cleaned.IsEmpty;
 end;
 
-function TMainForm.ResponsePlainText: string;
+function TMainForm.CountRealWords(const Text: string): Integer;
+var
+  Cleaned: string;
+  Words: TArray<string>;
+  I: Integer;
 begin
-  Result := rtbResponse.Lines.Text;
+  Cleaned := StripNoiseTokens(Text);
+  if Cleaned.IsEmpty then
+    Exit(0);
+  Words := Cleaned.Split([' ', #9, #10, #13, ',', '.', '!', '?', ';', ':'],
+    TStringSplitOptions.ExcludeEmpty);
+  Result := 0;
+  for I := 0 to High(Words) do
+    if Length(Words[I]) >= 2 then
+      Inc(Result);
+end;
+
+function TMainForm.IsLikelyNoiseHallucination(const Text: string): Boolean;
+var
+  Normalized: string;
+begin
+  Normalized := CleanTranscriptText(Text).ToLower;
+  if Normalized.IsEmpty then
+    Exit(True);
+  if TRegEx.IsMatch(Normalized,
+    '^(grazie|grazie\.|grazie della visione|grazie per la visione|grazie a tutti|grazie a voi|' +
+    'thanks|thank you|thank you\.|thanks for watching|merci|gracias|danke)(\s+.*)?\.?$',
+    [roIgnoreCase]) then
+    Exit(True);
+  if TRegEx.IsMatch(Normalized,
+    '^(sottotitoli|subtitles|subtitle|translated|traduzione|revisione|copyright|\.\.\.)',
+    [roIgnoreCase]) then
+    Exit(True);
+  Result := False;
+end;
+
+function TMainForm.ShouldShowHearingPreview(const Text: string): Boolean;
+begin
+  if IsLikelyNoiseHallucination(Text) then
+    Exit(False);
+  Result := CountRealWords(Text) >= 2;
+end;
+
+function TMainForm.ShouldCommitHearing(const Text: string): Boolean;
+begin
+  if IsLikelyNoiseHallucination(Text) then
+    Exit(False);
+  Result := IsUsefulTranscript(Text);
 end;
 
 function TMainForm.ResponseHasText: Boolean;
@@ -1900,7 +2035,7 @@ begin
   try
     if WillColor then
     begin
-      RichEditSetRangeColor(rtbResponse, FColoredChars, ColTo - FColoredChars, ThemeReadDone);
+      RichEditSetRangeColor(rtbResponse, FColoredChars, ColTo - FColoredChars, FReadDoneColor);
       FColoredChars := ColTo;
     end;
     SetRtbScrollY(TargetScroll);
@@ -1923,17 +2058,11 @@ procedure TMainForm.btnMenuClick(Sender: TObject);
 var
   P: TPoint;
 begin
-  RebuildMicMenu;
   RefreshIntelligenceMenu;
   RefreshTranscriptionMenu;
-  btnMenu.Font.Color := ThemeAccent;
-  try
-    P := Point(0, btnMenu.Height);
-    P := btnMenu.ClientToScreen(P);
-    mnuMain.Popup(P.X, P.Y);
-  finally
-    btnMenu.Font.Color := ThemeText;
-  end;
+  P := Point(0, btnMenu.Height);
+  P := btnMenu.ClientToScreen(P);
+  mnuMain.Popup(P.X, P.Y);
 end;
 
 procedure TMainForm.btnSetupClick(Sender: TObject);
@@ -2200,15 +2329,12 @@ end;
 
 procedure TMainForm.miListenKeyClick(Sender: TObject);
 begin
-  miKeyCtrl.Checked := Sender = miKeyCtrl;
-  miKeyShift.Checked := Sender = miKeyShift;
-  miKeyAlt.Checked := Sender = miKeyAlt;
-  if Sender = miKeyShift then FListeningKey := lkShift
-  else if Sender = miKeyAlt then FListeningKey := lkAlt
-  else FListeningKey := lkCtrl;
-  FHook.SetListeningKey(FListeningKey);
-  RegistrySetString('ListeningKey', ListeningKeyDisplayName(FListeningKey));
-  UpdateListeningKeyUi;
+  if Sender = miKeyShift then SetListeningKeyChoice(lkShift)
+  else if Sender = miKeyAlt then SetListeningKeyChoice(lkAlt)
+  else SetListeningKeyChoice(lkCtrl);
+  miKeyCtrl.Checked := FListeningKey = lkCtrl;
+  miKeyShift.Checked := FListeningKey = lkShift;
+  miKeyAlt.Checked := FListeningKey = lkAlt;
 end;
 
 procedure TMainForm.StartSettingsMonitor;
@@ -2237,29 +2363,48 @@ begin
 end;
 
 procedure TMainForm.miAutoCfgClick(Sender: TObject);
-var
-  F: TFrmSettings;
 begin
-  if (FSettingsForm <> nil) and FSettingsForm.Visible then
+  if FrmSettings.Visible then
   begin
-    FSettingsForm.BringToFront;
+    FrmSettings.BringToFront;
     Exit;
   end;
-  F := TFrmSettings.Create(Self);
-  FSettingsForm := F;
-  F.Configure(FSegmenter, FAudio,
+  FrmSettings.Configure(FSegmenter, FAudio,
     function: Boolean begin Result := FAutoMode; end,
     procedure(On: Boolean) begin SetAutoMode(On); end,
     StartSettingsMonitor,
     StopSettingsMonitor,
-    procedure begin FSettingsForm := nil; end);
-  F.Show;
+    nil);
+  PrepareDialogAboveMain(FrmSettings);
+  FrmSettings.Show;
+end;
+
+procedure TMainForm.miMicCfgClick(Sender: TObject);
+begin
+  if FrmMicSettings.Visible then
+  begin
+    FrmMicSettings.BringToFront;
+    Exit;
+  end;
+  FrmMicSettings.Configure(
+    function: Single begin Result := FMicRmsLast; end,
+    function: Single begin Result := FMicThreshold; end,
+    procedure(T: Single)
+    begin
+      FMicThreshold := T;
+      FAudio.MicSpeechThreshold := T;
+      RegistrySetInt('MicThreshold', Round(T * 1000));
+    end,
+    function: Boolean begin Result := FUseMic; end,
+    procedure(Value: Boolean) begin SetUseMicEnabled(Value); end,
+    StartMicMonitor);
+  PrepareDialogAboveMain(FrmMicSettings);
+  FrmMicSettings.Show;
 end;
 
 procedure TMainForm.miUseMicClick(Sender: TObject);
 begin
-  FUseMic := not FUseMic;
-  miUseMic.Checked := FUseMic;
+  SetUseMicEnabled(not FUseMic);
 end;
 
 procedure TMainForm.miMicClick(Sender: TObject);
@@ -2405,10 +2550,10 @@ begin
   else if Sender = miColGreen then FRespColor := RGB(120, 230, 150)
   else if Sender = miColYellow then FRespColor := RGB(240, 210, 90)
   else if Sender = miColMagenta then FRespColor := RGB(220, 120, 200)
-  else FRespColor := ThemeResponseText;
+  else FRespColor := clWindowText;
   rtbResponse.Font.Color := FRespColor;
   if FColoredChars > 0 then
-    RichEditSetRangeColor(rtbResponse, 0, FColoredChars, ThemeReadDone);
+    RichEditSetRangeColor(rtbResponse, 0, FColoredChars, FReadDoneColor);
   if FColoredChars < Length(ResponsePlainText) then
     RichEditSetRangeColor(rtbResponse, FColoredChars,
       Length(ResponsePlainText) - FColoredChars, FRespColor);
@@ -2416,15 +2561,8 @@ begin
 end;
 
 procedure TMainForm.miAboutClick(Sender: TObject);
-var
-  F: TFrmAbout;
 begin
-  F := TFrmAbout.Create(Self);
-  try
-    F.ShowModal;
-  finally
-    F.Free;
-  end;
+  TFrmAbout.ShowAbout(Self);
 end;
 
 procedure TMainForm.miExitClick(Sender: TObject);
@@ -2511,6 +2649,33 @@ begin
   BringToFront;
 end;
 
+procedure TMainForm.RestartEngineAfterRelicense;
+var
+  Err: string;
+begin
+  SetStatus('Restarting engine...');
+  FReady := False;
+  try
+    FEngine.Stop;
+    if not FEngine.Start then
+      raise Exception.Create(FEngine.LastError);
+    if not FEngine.Ping then
+      raise Exception.Create('Engine not responding after license activation.');
+    if not FEngine.Startup(FLangCode, FLangName, FIntelligence, FTranscription,
+      FProfile.Role, FProfile.TechStack, FProfile.JobDescription, FProfile.Experience,
+      FAnswerLength, OnEngineProgress, Err) then
+    begin
+      if not FEngine.StartupLegacy(FLangCode, FLangName, FIntelligence, FTranscription,
+        FProfile.Role, FProfile.TechStack, FProfile.JobDescription, FProfile.Experience,
+        FAnswerLength, OnEngineProgress, Err) then
+        raise Exception.Create(Err);
+    end;
+    SetStatus('');
+  finally
+    FReady := True;
+  end;
+end;
+
 procedure TMainForm.HandleLicensePeriodicResult(const Res: TLicensePeriodicResult; const Msg: string);
 begin
   case Res of
@@ -2519,17 +2684,33 @@ begin
     lprExpired, lprInvalid, lprNoLicense:
       begin
         FEngine.Stop;
-        LicenseStoreClear;
-        if not TFrmLicense.PromptRelicense then
+        FReady := False;
+        FrmLicense.PrepareShow;
+        if not TFrmLicense.PromptRelicense(Self) then
         begin
+          LicenseStoreClear;
           if Msg <> '' then
             MessageDlg(Msg, mtWarning, [mbOK], 0);
           Application.Terminate;
+        end
+        else
+        begin
+          LicenseMonitorPrimeFromStore(LicenseStoreGetForumUsername, LicenseStoreGet);
+          try
+            RestartEngineAfterRelicense;
+          except
+            on E: Exception do
+            begin
+              SetStatus('Engine restart failed: ' + E.Message);
+              MessageDlg('License saved but the engine could not restart:' + sLineBreak +
+                sLineBreak + E.Message, mtError, [mbOK], 0);
+              Application.Terminate;
+            end;
+          end;
         end;
       end;
     lprOfflineBlocked:
       begin
-        FEngine.Stop;
         if Msg <> '' then
           SetStatus(Msg);
       end;

@@ -135,7 +135,15 @@ internal static class EngineSessionAuth
             return false;
         }
 
-        if (!OnlineTime.TryFetchUtcNow(out var utcNow, out var timeErr))
+        // A lifetime license never expires, so the online clock check is pointless for it.
+        // Validate it fully offline — this prevents the engine from hanging on / failing at
+        // a dead public time server (worldtimeapi/timeapi), which otherwise blocks startup.
+        DateTime utcNow;
+        if (LicenseCodec.TryDecodePayload(licenseKey, out var decoded, out _) && decoded.Lifetime)
+        {
+            utcNow = DateTime.UtcNow;
+        }
+        else if (!OnlineTime.TryFetchUtcNow(out utcNow, out var timeErr))
         {
             error = timeErr ?? "internet time verification failed";
             return false;

@@ -19,66 +19,41 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     Left = 0
     Top = 0
     Width = 757
-    Height = 172
+    Height = 113
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 980
-    object lblTitle: TLabel
-      Left = 16
-      Top = 8
-      Width = 115
-      Height = 20
-      Caption = 'License Manager'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -15
-      Font.Name = 'Segoe UI Semibold'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object lblHint: TLabel
-      Left = 16
-      Top = 32
-      Width = 700
-      Height = 30
-      AutoSize = False
-      Caption = 
-        'Create license keys with embedded expiry (v4). Lifetime = no exp' +
-        'iry. Use presets for quick dates.'
-      WordWrap = True
-    end
     object lblUsername: TLabel
       Left = 16
-      Top = 72
+      Top = 16
       Width = 90
       Height = 15
       Caption = 'Forum username'
     end
     object lblExpiry: TLabel
       Left = 16
-      Top = 104
+      Top = 45
       Width = 36
       Height = 15
       Caption = 'Expires'
     end
     object lblPresets: TLabel
       Left = 16
-      Top = 136
+      Top = 78
       Width = 37
       Height = 15
       Caption = 'Presets'
     end
     object edtUsername: TEdit
       Left = 120
-      Top = 69
+      Top = 13
       Width = 200
       Height = 23
       TabOrder = 0
     end
     object dtpExpiry: TDateTimePicker
       Left = 120
-      Top = 101
+      Top = 42
       Width = 200
       Height = 23
       Date = 46021.000000000000000000
@@ -87,7 +62,7 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     end
     object chkLifetime: TCheckBox
       Left = 336
-      Top = 103
+      Top = 45
       Width = 80
       Height = 17
       Caption = 'Lifetime'
@@ -95,8 +70,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
       OnClick = chkLifetimeClick
     end
     object chkActive: TCheckBox
-      Left = 424
-      Top = 103
+      Left = 408
+      Top = 45
       Width = 60
       Height = 17
       Caption = 'Active'
@@ -106,7 +81,7 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     end
     object btnCreate: TButton
       Left = 628
-      Top = 131
+      Top = 73
       Width = 120
       Height = 27
       Caption = 'Create license'
@@ -115,7 +90,7 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     end
     object btn1Month: TButton
       Left = 120
-      Top = 132
+      Top = 74
       Width = 72
       Height = 25
       Caption = '+1 month'
@@ -123,8 +98,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
       OnClick = btnPresetClick
     end
     object btn3Month: TButton
-      Left = 200
-      Top = 132
+      Left = 198
+      Top = 74
       Width = 72
       Height = 25
       Caption = '+3 months'
@@ -132,8 +107,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
       OnClick = btnPresetClick
     end
     object btn6Month: TButton
-      Left = 280
-      Top = 132
+      Left = 276
+      Top = 74
       Width = 72
       Height = 25
       Caption = '+6 months'
@@ -141,8 +116,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
       OnClick = btnPresetClick
     end
     object btn12Month: TButton
-      Left = 360
-      Top = 132
+      Left = 354
+      Top = 74
       Width = 80
       Height = 25
       Caption = '+12 months'
@@ -152,9 +127,9 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
   end
   object lvLicenses: TListView
     Left = 0
-    Top = 172
+    Top = 113
     Width = 757
-    Height = 458
+    Height = 517
     Align = alClient
     Columns = <
       item
@@ -180,10 +155,34 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     GridLines = True
     ReadOnly = True
     RowSelect = True
+    PopupMenu = pmLicenses
     TabOrder = 1
     ViewStyle = vsReport
+    OnMouseDown = lvLicensesMouseDown
     OnSelectItem = lvLicensesSelectItem
-    ExplicitWidth = 980
-    ExplicitHeight = 408
+  end
+  object pmLicenses: TPopupMenu
+    OnPopup = pmLicensesPopup
+    Left = 320
+    Top = 240
+    object miCopyKey: TMenuItem
+      Caption = 'Copy key'
+      OnClick = miCopyKeyClick
+    end
+    object miDeleteUser: TMenuItem
+      Caption = 'Delete user'
+      OnClick = miDeleteUserClick
+    end
+  end
+  object mmMain: TMainMenu
+    Left = 400
+    Top = 240
+    object miKeys: TMenuItem
+      Caption = 'Keys'
+      object miGenKeys: TMenuItem
+        Caption = 'Generate signing keys...'
+        OnClick = miGenKeysClick
+      end
+    end
   end
 end

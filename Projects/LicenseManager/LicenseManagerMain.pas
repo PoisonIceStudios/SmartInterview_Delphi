@@ -1,4 +1,4 @@
-﻿unit LicenseManagerMain;
+unit LicenseManagerMain;
 
 interface
 
@@ -6,14 +6,12 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.UITypes,
   System.Generics.Collections, System.DateUtils,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls,
-  Vcl.ExtCtrls,
+  Vcl.ExtCtrls, Vcl.Menus,
   uLicenseRecordStore;
 
 type
   TFrmLicenseManagerMain = class(TForm)
     pnlTop: TPanel;
-    lblTitle: TLabel;
-    lblHint: TLabel;
     lblUsername: TLabel;
     lblExpiry: TLabel;
     lblPresets: TLabel;
@@ -27,12 +25,24 @@ type
     btn6Month: TButton;
     btn12Month: TButton;
     lvLicenses: TListView;
+    pmLicenses: TPopupMenu;
+    miCopyKey: TMenuItem;
+    miDeleteUser: TMenuItem;
+    mmMain: TMainMenu;
+    miKeys: TMenuItem;
+    miGenKeys: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure btnCreateClick(Sender: TObject);
     procedure lvLicensesSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
     procedure chkLifetimeClick(Sender: TObject);
     procedure btnPresetClick(Sender: TObject);
+    procedure lvLicensesMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure pmLicensesPopup(Sender: TObject);
+    procedure miCopyKeyClick(Sender: TObject);
+    procedure miDeleteUserClick(Sender: TObject);
+    procedure miGenKeysClick(Sender: TObject);
   private
     FRecords: TObjectList<TLicenseEntry>;
     procedure RefreshList;
@@ -52,25 +62,23 @@ implementation
 {$R *.dfm}
 
 uses
+  Vcl.Clipbrd,
   uLicenseCodec,
   uLicenseCodecV5,
-  uLicenseOnlineTime,
   uLicenseEcdsa,
-  uLicenseEcdsaSign;
+  uLicenseEcdsaSign,
+  uLicenseKeyGen;
 
 procedure TFrmLicenseManagerMain.FormCreate(Sender: TObject);
 begin
   FRecords := TObjectList<TLicenseEntry>.Create(True);
   TLicenseRecordStore.LoadInto(FRecords);
-  dtpExpiry.Date := IncMonth(Date, 12);
+  dtpExpiry.Date := Date;
   dtpExpiry.Time := EncodeTime(23, 59, 59, 0);
   chkLifetime.Checked := False;
   chkActive.Checked := True;
   UpdateExpiryControls;
   RefreshList;
-  lblHint.Caption := Format(
-    'Max username %d chars. Keys are %d chars (8x4). Internet required to create keys (online UTC). App verifies online too.',
-    [LicenseMaxUsernameLen, LicenseKeyChars]);
   SetStatus(Format('Loaded %d license(s). Data: %s', [FRecords.Count, TLicenseRecordStore.DataFilePath]), True);
 end;
 
@@ -81,10 +89,8 @@ end;
 
 procedure TFrmLicenseManagerMain.SetStatus(const Msg: string; Ok: Boolean);
 begin
-  if Ok then
-    lblTitle.Caption := 'License Manager — ' + Msg
-  else
-    lblTitle.Caption := 'License Manager — Error: ' + Msg;
+  if not Ok then
+  MessageDlg(Msg, mtError, [mbOK], 0);
 end;
 
 procedure TFrmLicenseManagerMain.UpdateExpiryControls;
@@ -102,19 +108,10 @@ begin
 end;
 
 procedure TFrmLicenseManagerMain.ApplyMonthPreset(Months: Integer);
-var
-  Utc, LocalNow: TDateTime;
-  Err: string;
 begin
-  if not TryFetchUtcNow(Utc, Err) then
-  begin
-    SetStatus(Err, False);
-    Exit;
-  end;
-  LocalNow := TTimeZone.Local.ToLocalTime(Utc);
   chkLifetime.Checked := False;
   UpdateExpiryControls;
-  dtpExpiry.Date := IncMonth(DateOf(LocalNow), Months);
+  dtpExpiry.Date := IncMonth(Date, Months);
 end;
 
 procedure TFrmLicenseManagerMain.btnPresetClick(Sender: TObject);
@@ -189,7 +186,6 @@ var
   UserNorm, Key, Err: string;
   Entry: TLicenseEntry;
   HadExisting: Boolean;
-  Utc: TDateTime;
   Payload: TLicensePayload;
   PayloadBytes, Hash, Sig: TBytes;
 begin
@@ -208,17 +204,12 @@ begin
     Exit;
   end;
 
-  if not TryFetchUtcNow(Utc, Err) then
-  begin
-    SetStatus(Err, False);
-    Exit;
-  end;
 
   HadExisting := FindByUsername(UserNorm) <> nil;
   RemoveAllByUsername(UserNorm);
 
   try
-    PayloadBytes := LicenseCodecBuildPayloadV5(UserNorm, dtpExpiry.Date, Utc,
+    PayloadBytes := LicenseCodecBuildPayloadV5(UserNorm, dtpExpiry.Date,
       chkLifetime.Checked, chkActive.Checked);
     Hash := LicenseEcdsaHash(PayloadBytes);
     Sig := LicenseEcdsaSignHash(Hash);
@@ -231,22 +222,17 @@ begin
     end;
   end;
 
-  if not LicenseCodecTryValidate(Key, UserNorm, Utc, Err) then
-  begin
-    SetStatus('Generated key failed validation: ' + Err, False);
-    Exit;
-  end;
-
+  { Admin tool: verify signature/format only — no expiry, username, or active checks. }
   if not LicenseCodecTryDecodePayload(Key, Payload, Err) then
   begin
-    SetStatus('Could not decode generated key: ' + Err, False);
+    SetStatus('Generated key could not be verified: ' + Err, False);
     Exit;
   end;
 
   Entry := TLicenseEntry.Create;
   Entry.Username := UserNorm;
   Entry.LicenseKey := Key;
-  Entry.Registered := TTimeZone.Local.ToLocalTime(Utc);
+  Entry.Registered := Now;
   Entry.ExpiryLabel := LicenseCodecFormatExpiry(Payload);
   Entry.Lifetime := Payload.Lifetime;
   Entry.ExpiryDate := LicenseCodecExpiryToDate(Payload.ExpiryUnixDay);
@@ -294,6 +280,86 @@ begin
   else
     dtpExpiry.Date := IncMonth(Date, 12);
   UpdateExpiryControls;
+end;
+
+procedure TFrmLicenseManagerMain.lvLicensesMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Item: TListItem;
+begin
+  if Button = mbRight then
+  begin
+    Item := lvLicenses.GetItemAt(X, Y);
+    if Item <> nil then
+      Item.Selected := True;
+  end;
+end;
+
+procedure TFrmLicenseManagerMain.pmLicensesPopup(Sender: TObject);
+var
+  HasSel: Boolean;
+begin
+  HasSel := (lvLicenses.Selected <> nil) and (lvLicenses.Selected.Data <> nil);
+  miCopyKey.Enabled := HasSel;
+  miDeleteUser.Enabled := HasSel;
+end;
+
+procedure TFrmLicenseManagerMain.miCopyKeyClick(Sender: TObject);
+var
+  Entry: TLicenseEntry;
+begin
+  if (lvLicenses.Selected = nil) or (lvLicenses.Selected.Data = nil) then
+    Exit;
+  Entry := TLicenseEntry(lvLicenses.Selected.Data);
+  Clipboard.AsText := Entry.LicenseKey;
+  SetStatus(Format('Key copied for "%s".', [Entry.Username]), True);
+end;
+
+procedure TFrmLicenseManagerMain.miDeleteUserClick(Sender: TObject);
+var
+  Entry: TLicenseEntry;
+  UserName: string;
+begin
+  if (lvLicenses.Selected = nil) or (lvLicenses.Selected.Data = nil) then
+    Exit;
+  Entry := TLicenseEntry(lvLicenses.Selected.Data);
+  UserName := Entry.Username;
+
+  if MessageDlg(Format('Delete the license for "%s"?', [UserName]),
+    mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+
+  RemoveAllByUsername(UserName);
+  try
+    TLicenseRecordStore.SaveFrom(FRecords);
+  except
+    on E: Exception do
+    begin
+      SetStatus('Could not save licenses.json: ' + E.Message, False);
+      Exit;
+    end;
+  end;
+
+  RefreshList;
+  SetStatus(Format('Deleted license for "%s".', [UserName]), True);
+end;
+
+procedure TFrmLicenseManagerMain.miGenKeysClick(Sender: TObject);
+var
+  Hex: string;
+begin
+  if LicenseSigningKeyExists then
+    if MessageDlg('A signing key already exists. Generating a new one will INVALIDATE all ' +
+      'existing licenses and require rebuilding SmartInterview and the Engine. Continue?',
+      mtWarning, [mbYes, mbNo], 0) <> mrYes then
+      Exit;
+
+  Clipboard.AsText := Hex;
+  MessageDlg('New signing keys created.' + sLineBreak + sLineBreak +
+    'Public key (copied to clipboard):' + sLineBreak + Hex + sLineBreak + sLineBreak +
+    'Update the embedded public key in the application sources, then rebuild.',
+    mtInformation, [mbOK], 0);
+  SetStatus('New signing keys generated.', True);
 end;
 
 end.

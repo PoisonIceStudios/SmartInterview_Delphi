@@ -1,5 +1,9 @@
 unit uLicenseCodecV5;
 
+{ License v5 keys (SI5-...). Compact, variable-length payload + ECDSA P-256 signature.
+  Payload: magic(1) flags(1) expiryDay(2, UInt16 LE) userLen(1) username(userLen).
+  Combined = payload || signature(64). Base32, grouped in 4s, prefixed "SI5-". }
+
 interface
 
 uses
@@ -9,18 +13,15 @@ uses
 const
   LicenseKeyPrefixV5 = 'SI5-';
   LicenseMagicV5 = $55;
-  LicensePayloadBytesV5 = 21;
   LicenseSigBytesV5 = 64;
-  LicenseV5TotalBytes = 85;
-  LicenseV5Base32Chars = 136;
-  LicenseV5Groups = 34;
+  LicenseV5HeaderBytes = 5;
 
 function LicenseCodecIsV5Key(const LicenseKey: string): Boolean;
 function LicenseCodecNormalizeKeyV5(const LicenseKey: string): string;
 function LicenseCodecFormatKeyV5(const RawKey: string): string;
 
 function LicenseCodecBuildPayloadV5(const ForumUsername: string; const ExpiryDate: TDateTime;
-  const IssuedUtc: TDateTime; Lifetime, Active: Boolean): TBytes;
+  Lifetime, Active: Boolean): TBytes;
 
 function LicenseCodecFormatSignedKeyV5(const Payload, Signature: TBytes): string;
 
@@ -33,9 +34,13 @@ function LicenseCodecTryValidateV5(const LicenseKey, ExpectedUsername: string;
 implementation
 
 uses
-  System.Classes,
   System.DateUtils,
   uLicenseEcdsa;
+
+function Base32CharCount(ByteCount: Integer): Integer;
+begin
+  Result := (ByteCount * 8 + 4) div 5;
+end;
 
 function LicenseCodecIsV5Key(const LicenseKey: string): Boolean;
 begin
@@ -56,27 +61,30 @@ end;
 
 function LicenseCodecFormatKeyV5(const RawKey: string): string;
 var
-  Raw: string;
+  Raw, Group: string;
   I: Integer;
 begin
   Raw := LicenseCodecNormalizeKeyV5(RawKey);
   Result := LicenseKeyPrefixV5;
-  for I := 0 to LicenseV5Groups - 1 do
+  I := 0;
+  while I * 4 < Length(Raw) do
   begin
+    Group := Copy(Raw, I * 4 + 1, 4);
     if I > 0 then
       Result := Result + '-';
-    Result := Result + Copy(Raw, I * 4 + 1, 4);
+    Result := Result + Group;
+    Inc(I);
   end;
 end;
 
 function LicenseCodecBuildPayloadV5(const ForumUsername: string; const ExpiryDate: TDateTime;
-  const IssuedUtc: TDateTime; Lifetime, Active: Boolean): TBytes;
+  Lifetime, Active: Boolean): TBytes;
 var
   UserNorm: string;
   UserUtf8: TBytes;
   Flags: Byte;
-  ExpiryUnixDay, IssuedUnixDay: UInt32;
-  I, FillStart: Integer;
+  ExpiryDay: UInt32;
+  Expiry16: Word;
 begin
   UserNorm := LicenseNormalizeUsername(ForumUsername);
   if UserNorm = '' then
@@ -93,40 +101,39 @@ begin
   if Lifetime then
   begin
     Flags := Flags or LicenseFlagLifetime;
-    ExpiryUnixDay := 0;
+    ExpiryDay := 0;
   end
   else
-    ExpiryUnixDay := LicenseCodecUnixDayFromLocalDate(ExpiryDate);
+    ExpiryDay := LicenseCodecUnixDayFromLocalDate(ExpiryDate);
 
-  IssuedUnixDay := LicenseCodecUnixDayFromUtc(IssuedUtc);
+  if ExpiryDay > High(Word) then
+    raise EArgumentException.Create('Expiry date is out of range.');
+  Expiry16 := Word(ExpiryDay);
 
-  SetLength(Result, LicensePayloadBytesV5);
-  FillChar(Result[0], LicensePayloadBytesV5, 0);
+  SetLength(Result, LicenseV5HeaderBytes + Length(UserUtf8));
   Result[0] := LicenseMagicV5;
   Result[1] := Flags;
-  Move(ExpiryUnixDay, Result[2], SizeOf(UInt32));
-  Move(IssuedUnixDay, Result[6], SizeOf(UInt32));
-  Result[10] := Length(UserUtf8);
+  Result[2] := Byte(Expiry16 and $FF);
+  Result[3] := Byte((Expiry16 shr 8) and $FF);
+  Result[4] := Byte(Length(UserUtf8));
   if Length(UserUtf8) > 0 then
-    Move(UserUtf8[0], Result[11], Length(UserUtf8));
-
-  FillStart := 11 + Length(UserUtf8);
-  for I := FillStart to LicensePayloadBytesV5 - 1 do
-    Result[I] := 0;
+    Move(UserUtf8[0], Result[LicenseV5HeaderBytes], Length(UserUtf8));
 end;
 
 function LicenseCodecFormatSignedKeyV5(const Payload, Signature: TBytes): string;
 var
   Combined: TBytes;
+  Total: Integer;
   Raw: string;
 begin
-  if (Length(Payload) <> LicensePayloadBytesV5) or (Length(Signature) <> LicenseSigBytesV5) then
+  if (Length(Payload) < LicenseV5HeaderBytes) or (Length(Signature) <> LicenseSigBytesV5) then
     raise EArgumentException.Create('Invalid v5 license payload or signature length.');
 
-  SetLength(Combined, LicenseV5TotalBytes);
-  Move(Payload[0], Combined[0], LicensePayloadBytesV5);
-  Move(Signature[0], Combined[LicensePayloadBytesV5], LicenseSigBytesV5);
-  Raw := LicenseCodecEncodeBase32(Combined, LicenseV5Base32Chars);
+  Total := Length(Payload) + LicenseSigBytesV5;
+  SetLength(Combined, Total);
+  Move(Payload[0], Combined[0], Length(Payload));
+  Move(Signature[0], Combined[Length(Payload)], LicenseSigBytesV5);
+  Raw := LicenseCodecEncodeBase32(Combined, Base32CharCount(Total));
   Result := LicenseCodecFormatKeyV5(Raw);
 end;
 
@@ -136,14 +143,14 @@ var
   Len: Integer;
   UserBytes: TBytes;
   Flags: Byte;
-  ExpiryUnixDay, IssuedUnixDay: UInt32;
+  ExpiryDay: UInt32;
 begin
   FillChar(Payload, SizeOf(Payload), 0);
   ErrorMsg := '';
   Result := False;
   Payload.Version := 5;
 
-  if Length(Plain) <> LicensePayloadBytesV5 then
+  if Length(Plain) < LicenseV5HeaderBytes then
   begin
     ErrorMsg := 'License payload size is invalid.';
     Exit;
@@ -156,17 +163,16 @@ begin
   end;
 
   Flags := Plain[1];
-  Move(Plain[2], ExpiryUnixDay, SizeOf(UInt32));
-  Move(Plain[6], IssuedUnixDay, SizeOf(UInt32));
-  Len := Plain[10];
-  if (Len < 1) or (Len > LicenseMaxUsernameLen) or ((11 + Len) > LicensePayloadBytesV5) then
+  ExpiryDay := UInt32(Plain[2]) or (UInt32(Plain[3]) shl 8);
+  Len := Plain[4];
+  if (Len < 1) or (Len > LicenseMaxUsernameLen) or ((LicenseV5HeaderBytes + Len) <> Length(Plain)) then
   begin
     ErrorMsg := 'License key format is invalid.';
     Exit;
   end;
 
   SetLength(UserBytes, Len);
-  Move(Plain[11], UserBytes[0], Len);
+  Move(Plain[LicenseV5HeaderBytes], UserBytes[0], Len);
   Payload.ForumUsername := LicenseNormalizeUsername(TEncoding.UTF8.GetString(UserBytes));
   if Payload.ForumUsername = '' then
   begin
@@ -176,8 +182,8 @@ begin
 
   Payload.Active := (Flags and LicenseFlagActive) <> 0;
   Payload.Lifetime := (Flags and LicenseFlagLifetime) <> 0;
-  Payload.ExpiryUnixDay := ExpiryUnixDay;
-  Payload.IssuedUnixDay := IssuedUnixDay;
+  Payload.ExpiryUnixDay := ExpiryDay;
+  Payload.IssuedUnixDay := 0;
   Result := True;
 end;
 
@@ -185,7 +191,8 @@ function LicenseCodecTryDecodePayloadV5(const LicenseKey: string; out Payload: T
   out ErrorMsg: string): Boolean;
 var
   Normalized: string;
-  Combined, PayloadBytes, SigBytes, Hash: TBytes;
+  Header, Combined, PayloadBytes, SigBytes, Hash: TBytes;
+  UserLen, PayloadLen, Total: Integer;
 begin
   FillChar(Payload, SizeOf(Payload), 0);
   ErrorMsg := '';
@@ -198,18 +205,35 @@ begin
   end;
 
   Normalized := LicenseCodecNormalizeKeyV5(LicenseKey);
-  if Length(Normalized) <> LicenseV5Base32Chars then
+  if Length(Normalized) < Base32CharCount(LicenseV5HeaderBytes) then
   begin
     ErrorMsg := 'License key format is invalid.';
     Exit;
   end;
 
   try
-    Combined := LicenseCodecDecodeBase32(Normalized, LicenseV5TotalBytes);
-    SetLength(PayloadBytes, LicensePayloadBytesV5);
+    Header := LicenseCodecDecodeBase32(Copy(Normalized, 1, Base32CharCount(LicenseV5HeaderBytes)),
+      LicenseV5HeaderBytes);
+    UserLen := Header[4];
+    if (UserLen < 1) or (UserLen > LicenseMaxUsernameLen) then
+    begin
+      ErrorMsg := 'License key format is invalid.';
+      Exit;
+    end;
+
+    PayloadLen := LicenseV5HeaderBytes + UserLen;
+    Total := PayloadLen + LicenseSigBytesV5;
+    if Length(Normalized) <> Base32CharCount(Total) then
+    begin
+      ErrorMsg := 'License key format is invalid.';
+      Exit;
+    end;
+
+    Combined := LicenseCodecDecodeBase32(Normalized, Total);
+    SetLength(PayloadBytes, PayloadLen);
     SetLength(SigBytes, LicenseSigBytesV5);
-    Move(Combined[0], PayloadBytes[0], LicensePayloadBytesV5);
-    Move(Combined[LicensePayloadBytesV5], SigBytes[0], LicenseSigBytesV5);
+    Move(Combined[0], PayloadBytes[0], PayloadLen);
+    Move(Combined[PayloadLen], SigBytes[0], LicenseSigBytesV5);
 
     if not LicenseCodecTryParsePayloadV5(PayloadBytes, Payload, ErrorMsg) then
       Exit;

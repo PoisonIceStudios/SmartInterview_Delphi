@@ -48,7 +48,6 @@ end;
 
 procedure DebugLogWrite(const Message: string);
 begin
-{$IFDEF DIAGNOSTIC_LOG}
   try
     GLock.Enter;
     try
@@ -59,7 +58,6 @@ begin
     end;
   except
   end;
-{$ENDIF}
 end;
 
 initialization

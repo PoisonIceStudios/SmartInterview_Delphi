@@ -3,7 +3,7 @@ object FrmDisclaimer: TFrmDisclaimer
   Top = 0
   BorderStyle = bsDialog
   Caption = 'Terms and Conditions'
-  ClientHeight = 473
+  ClientHeight = 465
   ClientWidth = 565
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -24,7 +24,8 @@ object FrmDisclaimer: TFrmDisclaimer
       ''
       
         'Please read this agreement carefully. By checking the acceptance' +
-        ' box and using this software (the '
+        ' box and using this software '
+      '(the '
       
         '"Software"), you acknowledge that you have read, understood, and' +
         ' agree to be bound by all of '
@@ -39,7 +40,8 @@ object FrmDisclaimer: TFrmDisclaimer
         'rum username. Each license is '
       
         'personal, non-transferable, and bound to the machine and usernam' +
-        'e for which it was issued. You '
+        'e for which it was issued. '
+      'You '
       
         'may not share, lend, resell, sublicense, or make the Software av' +
         'ailable to any third party.'
@@ -101,7 +103,8 @@ object FrmDisclaimer: TFrmDisclaimer
         'eveloper, and licensor of the '
       
         'Software (collectively, the "Provider") shall not be liable for ' +
-        'any direct, indirect, incidental, special, '
+        'any direct, indirect, incidental, '
+      'special, '
       
         'consequential, punitive, or exemplary damages, or for any loss o' +
         'f profits, data, goodwill, '
@@ -110,7 +113,8 @@ object FrmDisclaimer: TFrmDisclaimer
         ' to your access to, use of, inability '
       
         'to use, or reliance on the Software, even if advised of the poss' +
-        'ibility of such damages. You assume '
+        'ibility of such damages. You '
+      'assume '
       
         'the entire risk as to the quality, performance, and results of t' +
         'he Software.'
@@ -118,7 +122,8 @@ object FrmDisclaimer: TFrmDisclaimer
       '6. SOLE RESPONSIBILITY OF THE USER.'
       
         'You are solely and exclusively responsible for any and all use y' +
-        'ou make of the Software and for any '
+        'ou make of the Software and for '
+      'any '
       
         'consequence, damage, claim, penalty, or problem of any nature re' +
         'sulting from such use, '
@@ -133,7 +138,8 @@ object FrmDisclaimer: TFrmDisclaimer
         'rom and against any and all '
       
         'claims, liabilities, damages, losses, and expenses (including re' +
-        'asonable legal fees) arising out of or '
+        'asonable legal fees) arising out of '
+      'or '
       
         'related to your use of the Software or your violation of these t' +
         'erms.'
@@ -165,7 +171,8 @@ object FrmDisclaimer: TFrmDisclaimer
       '10. ENTIRE AGREEMENT.'
       
         'These terms constitute the entire agreement between you and the ' +
-        'Provider regarding the Software '
+        'Provider regarding the '
+      'Software '
       
         'and supersede any prior understanding. If any provision is held ' +
         'unenforceable, the remaining '
@@ -189,7 +196,7 @@ object FrmDisclaimer: TFrmDisclaimer
   end
   object btnDecline: TButton
     Left = 326
-    Top = 429
+    Top = 421
     Width = 132
     Height = 28
     Caption = 'Decline and Exit'
@@ -198,7 +205,7 @@ object FrmDisclaimer: TFrmDisclaimer
   end
   object btnAccept: TButton
     Left = 464
-    Top = 429
+    Top = 421
     Width = 84
     Height = 28
     Caption = 'Accept'

@@ -24,6 +24,7 @@ const
 procedure LicenseMonitorReset;
 procedure LicenseMonitorNoteOnlineSuccess(const UtcNow: TDateTime);
 procedure LicenseMonitorPersistAnchor(const Utc: TDateTime; const User, Key: string);
+procedure LicenseMonitorPrimeFromStore(const User, Key: string);
 function LicenseMonitorPeriodicCheck(out Message: string): TLicensePeriodicResult;
 
 implementation
@@ -114,6 +115,13 @@ begin
   GAnchorValid := True;
 end;
 
+procedure LicenseMonitorPrimeFromStore(const User, Key: string);
+begin
+  if Trim(Key) = '' then
+    Exit;
+  LicenseMonitorLoadAnchorFromRegistry(User, Key);
+end;
+
 function EstimateUtcNow: TDateTime;
 var
   ElapsedMs: UInt64;
@@ -150,9 +158,19 @@ begin
   GLastPeriodicCheckMs := NowMono;
 
   Key := RegistryGetString('LicenseKey');
-  User := RegistryGetString('LicenseForumUser');
+  User := LicenseNormalizeUsername(RegistryGetString('LicenseForumUser'));
   if Trim(Key) = '' then
     Exit(lprNoLicense);
+
+  // Lifetime licenses never expire → re-validate fully offline. No time server, no
+  // offline-grace window, no spurious re-prompt when the network is down.
+  if LicenseCodecTryDecodePayload(Key, Payload, Err) and Payload.Lifetime then
+  begin
+    if LicenseCodecTryValidate(Key, User, Now, Err) then
+      Exit(lprOk);
+    Message := Err;
+    Exit(lprInvalid);
+  end;
 
   if not GAnchorValid then
     LicenseMonitorLoadAnchorFromRegistry(User, Key);

@@ -14,6 +14,9 @@ uses
 const
   GpuLayersUnknown = -999;
   GpuLayersAll = -1;
+  EngineErrMissing = 'The AI engine is missing. Reinstall the application.';
+  EngineErrStartFailed = 'Could not start the AI engine. Reinstall the application.';
+  EngineErrNoResponse = 'The AI engine did not respond. Restart the application.';
 
 type
   TPipeProgressEvent = procedure(Sender: TObject; const Phase: string; Progress: Double) of object;
@@ -110,9 +113,15 @@ uses
   System.IOUtils,
   System.Math,
   System.NetEncoding,
+  uAppPaths,
   uDebugLog,
   uLicenseService,
   uSessionAuth;
+
+const
+  EngineHostExeName = 'SmartInterview.Engine.exe';
+  EngineHostDllName = 'SmartInterview.Engine.dll';
+  CREATE_UNICODE_ENVIRONMENT = $00000400;
 
 type
   TPipeReaderThread = class(TThread)
@@ -290,127 +299,108 @@ begin
 end;
 
 function TPipeEngine.FindEngineExe: string;
-var
-  Base: string;
-  Candidates: array of string;
-  I: Integer;
-  Candidate: string;
 begin
-  Base := ExtractFilePath(ParamStr(0));
-  SetLength(Candidates, 6);
-  Candidates[0] := TPath.Combine(Base, 'EngineDeploy\SmartInterview.Engine.exe');
-  Candidates[1] := TPath.Combine(Base, 'SmartInterview.Engine.exe');
-  Candidates[2] := TPath.Combine(Base, '..\..\Engine\bin\Release\net10.0-windows\win-x64\SmartInterview.Engine.exe');
-  Candidates[3] := TPath.Combine(Base, '..\..\Engine\bin\Debug\net10.0-windows\win-x64\SmartInterview.Engine.exe');
-  Candidates[4] := TPath.Combine(Base, '..\Engine\bin\Release\net10.0-windows\win-x64\SmartInterview.Engine.exe');
-  Candidates[5] := TPath.Combine(Base, '..\Engine\bin\Debug\net10.0-windows\win-x64\SmartInterview.Engine.exe');
-  for I := 0 to High(Candidates) do
-  begin
-    Candidate := TPath.GetFullPath(Candidates[I]);
-    if FileExists(Candidate) then
-      Exit(Candidate);
-  end;
-  Result := TPath.GetFullPath(Candidates[0]);
+  Result := TPath.Combine(EngineDeployDir, EngineHostExeName);
 end;
 
 function TPipeEngine.FindEngineDll: string;
-var
-  ExePath, DllPath: string;
-  I: Integer;
-  Base: string;
-  RelPaths: array of string;
 begin
-  ExePath := FindEngineExe;
-  DllPath := ChangeFileExt(ExePath, '.dll');
-  if FileExists(DllPath) then
-    Exit(DllPath);
-  Base := ExtractFilePath(ParamStr(0));
-  SetLength(RelPaths, 4);
-  RelPaths[0] := TPath.GetFullPath(TPath.Combine(Base,
-    '..\..\Engine\bin\Release\net10.0-windows\win-x64\SmartInterview.Engine.dll'));
-  RelPaths[1] := TPath.GetFullPath(TPath.Combine(Base,
-    '..\..\Engine\bin\Debug\net10.0-windows\win-x64\SmartInterview.Engine.dll'));
-  RelPaths[2] := TPath.GetFullPath(TPath.Combine(Base,
-    'EngineDeploy\SmartInterview.Engine.dll'));
-  RelPaths[3] := TPath.GetFullPath(TPath.Combine(Base,
-    'SmartInterview.Engine.dll'));
-  for I := 0 to High(RelPaths) do
-    if FileExists(RelPaths[I]) then
-      Exit(RelPaths[I]);
-  Result := DllPath;
+  Result := TPath.Combine(EngineDeployDir, EngineHostDllName);
 end;
 
 function TPipeEngine.Start: Boolean;
 var
-  Exe, Dll, WorkDir, CmdLine, LicenseKey: string;
+  Exe, Dll, WorkDir, CmdLine, AppName, LicenseKey: string;
   SI: TStartupInfo;
   SecAttr: TSecurityAttributes;
   StdInRead, StdOutWrite: THandle;
   ChildEnv: PChar;
+  WinErr: DWORD;
+  Created: Boolean;
+  CreationFlags: DWORD;
 begin
   Result := False;
+  FLastError := '';
   if FRunning then
     Exit(True);
   FSessionToken := LicenseBuildSessionToken;
   LicenseKey := LicenseStoreGet;
   ChildEnv := SessionBuildChildEnvironment(FSessionToken, LicenseKey, LicenseStoreGetForumUsername);
   try
-  Exe := FindEngineExe;
-  if FileExists(Exe) then
-  begin
-    WorkDir := ExtractFilePath(Exe);
-    CmdLine := '"' + Exe + '"';
-  end
-  else
-  begin
-    Dll := FindEngineDll;
-    if not FileExists(Dll) then
-      raise Exception.Create(
-        'Engine not found. Build it with: dotnet build Engine\SmartInterview.Engine.csproj -c Release ' +
-        'then copy Engine\bin\Release\net10.0-windows\win-x64\ next to SmartInterview.exe.');
-    WorkDir := ExtractFilePath(Dll);
-    CmdLine := 'dotnet "' + Dll + '"';
-  end;
+    Exe := FindEngineExe;
+    if FileExists(Exe) then
+    begin
+      AppName := Exe;
+      CmdLine := '"' + Exe + '"';
+      WorkDir := EngineDeployDir;
+    end
+    else
+    begin
+      Dll := FindEngineDll;
+      if not FileExists(Dll) then
+        raise Exception.Create(EngineErrMissing);
+      AppName := '';
+      CmdLine := 'dotnet "' + Dll + '"';
+      WorkDir := EngineDeployDir;
+    end;
 
-  SecAttr.nLength := SizeOf(SecAttr);
-  SecAttr.bInheritHandle := True;
-  SecAttr.lpSecurityDescriptor := nil;
+    SecAttr.nLength := SizeOf(SecAttr);
+    SecAttr.bInheritHandle := True;
+    SecAttr.lpSecurityDescriptor := nil;
 
-  if not CreatePipe(StdInRead, FStdInWrite, @SecAttr, 0) then
-    Exit;
-  if not CreatePipe(FStdOutRead, StdOutWrite, @SecAttr, 0) then
-  begin
-    CloseHandle(FStdInWrite);
-    FStdInWrite := 0;
-    Exit;
-  end;
+    if not CreatePipe(StdInRead, FStdInWrite, @SecAttr, 0) then
+    begin
+      FLastError := EngineErrStartFailed;
+      Exit;
+    end;
+    if not CreatePipe(FStdOutRead, StdOutWrite, @SecAttr, 0) then
+    begin
+      CloseHandle(FStdInWrite);
+      FStdInWrite := 0;
+      FLastError := EngineErrStartFailed;
+      Exit;
+    end;
 
-  FillChar(SI, SizeOf(SI), 0);
-  SI.cb := SizeOf(SI);
-  SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
-  SI.hStdInput := StdInRead;
-  SI.hStdOutput := StdOutWrite;
-  SI.hStdError := StdOutWrite;
-  SI.wShowWindow := SW_HIDE;
+    SetHandleInformation(FStdInWrite, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(FStdOutRead, HANDLE_FLAG_INHERIT, 0);
 
-  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True, CREATE_NO_WINDOW, ChildEnv,
-    PChar(WorkDir), SI, FProcessInfo) then
-  begin
+    FillChar(SI, SizeOf(SI), 0);
+    SI.cb := SizeOf(SI);
+    SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+    SI.hStdInput := StdInRead;
+    SI.hStdOutput := StdOutWrite;
+    SI.hStdError := StdOutWrite;
+    SI.wShowWindow := SW_HIDE;
+
+    UniqueString(CmdLine);
+    CreationFlags := CREATE_NO_WINDOW or CREATE_UNICODE_ENVIRONMENT;
+    if AppName <> '' then
+      Created := CreateProcess(PChar(AppName), PChar(CmdLine), nil, nil, True, CreationFlags,
+        ChildEnv, PChar(WorkDir), SI, FProcessInfo)
+    else
+      Created := CreateProcess(nil, PChar(CmdLine), nil, nil, True, CreationFlags,
+        ChildEnv, PChar(WorkDir), SI, FProcessInfo);
+
+    if not Created then
+    begin
+      WinErr := GetLastError;
+      DebugLogWrite(Format('[PipeEngine] CreateProcess failed Win32=%d', [WinErr]));
+      CloseHandle(StdInRead);
+      CloseHandle(StdOutWrite);
+      CloseHandle(FStdInWrite);
+      CloseHandle(FStdOutRead);
+      FStdInWrite := 0;
+      FStdOutRead := 0;
+      FLastError := EngineErrStartFailed;
+      Exit;
+    end;
+
     CloseHandle(StdInRead);
     CloseHandle(StdOutWrite);
-    CloseHandle(FStdInWrite);
-    CloseHandle(FStdOutRead);
-    FStdInWrite := 0;
-    FStdOutRead := 0;
-    Exit;
-  end;
-
-  CloseHandle(StdInRead);
-  CloseHandle(StdOutWrite);
-  FReaderThread := TPipeReaderThread.Create(Self);
-  FReaderThread.Start;
-  FRunning := True;
-  Result := True;
+    FReaderThread := TPipeReaderThread.Create(Self);
+    FReaderThread.Start;
+    FRunning := True;
+    Result := True;
   finally
     FreeMem(ChildEnv);
   end;

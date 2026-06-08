@@ -3,6 +3,8 @@ unit uAppPaths;
 interface
 
 function ModelsDir: string;
+function ExeDir: string;
+function EngineDeployDir: string;
 
 implementation
 
@@ -100,6 +102,16 @@ begin
 
   Result := TPath.Combine(TPath.Combine(GetLocalAppData, 'SmartInterview'), 'models');
   ForceDirectories(Result);
+end;
+
+function ExeDir: string;
+begin
+  Result := IncludeTrailingPathDelimiter(TPath.GetFullPath(ExtractFilePath(ParamStr(0))));
+end;
+
+function EngineDeployDir: string;
+begin
+  Result := TPath.Combine(ExeDir, 'EngineDeploy');
 end;
 
 function ModelsDir: string;

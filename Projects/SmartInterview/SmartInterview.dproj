@@ -102,6 +102,19 @@
         <DCCReference Include="uFrmInterviewSetup.pas">
             <Form>FrmInterviewSetup</Form>
         </DCCReference>
+        <DCCReference Include="uFrmProfile.pas">
+            <Form>FrmProfile</Form>
+        </DCCReference>
+        <DCCReference Include="uFrmAbout.pas">
+            <Form>FrmAbout</Form>
+        </DCCReference>
+        <DCCReference Include="uFrmSettings.pas">
+            <Form>FrmSettings</Form>
+        </DCCReference>
+        <DCCReference Include="uFrmMicSettings.pas">
+            <Form>FrmMicSettings</Form>
+        </DCCReference>
+        <DCCReference Include="src\uDialogZOrder.pas"/>
         <DCCReference Include="uMainForm.pas">
             <Form>MainForm</Form>
         </DCCReference>
@@ -1111,6 +1124,6 @@
     </Target>
     <Target Name="BuildEngineDeploy" AfterTargets="CopyResources" Condition="'$(Platform)'=='Win64'">
         <Message Importance="high" Text="Building SmartInterview.Engine and deploying to Win64\$(Configuration)\EngineDeploy\..."/>
-        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\..\Engine\SmartInterview.Engine.csproj&quot; -c Release" IgnoreExitCode="false"/>
+        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\Engine\SmartInterview.Engine.csproj&quot; -c Release" IgnoreExitCode="false"/>
     </Target>
 </Project>

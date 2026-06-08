@@ -17,7 +17,7 @@ internal static class LicenseCodec
 {
     public const int KeyChars = 32;
     public const int KeyGroups = 8;
-    public const int MaxUsernameLen = 10;
+    public const int MaxUsernameLen = 30;
     public const byte FlagActive = 0x01;
     public const byte FlagLifetime = 0x02;
 
@@ -275,12 +275,15 @@ internal static class LicenseCodec
                 break;
         }
 
-        while (result.Length < chars)
+        // Flush remaining real bits (bits is 0..4 here) into a final 5-bit group,
+        // left-aligning them so decode recovers the last byte intact.
+        if (result.Length < chars && bits > 0)
         {
-            buffer <<= 5;
-            bits += 5;
-            result.Append(Base32Alphabet[buffer & 0x1F]);
+            result.Append(Base32Alphabet[(buffer << (5 - bits)) & 0x1F]);
+            bits = 0;
         }
+        while (result.Length < chars)
+            result.Append(Base32Alphabet[0]);
 
         return result.ToString();
     }

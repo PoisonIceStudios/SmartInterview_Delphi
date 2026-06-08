@@ -94,7 +94,7 @@ begin
       ErrorMsg := 'Could not parse time server response.';
   except
     on E: Exception do
-      ErrorMsg := E.Message;
+      ErrorMsg := 'Could not reach the time server.';
   end;
   Client.Free;
 end;

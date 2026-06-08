@@ -120,8 +120,8 @@ Se sei offline da più di 72 ore dall’ultimo check online → motore AI fermat
 
 ## Test rapido consigliato
 
-1. Genera chiavi: `dotnet run --project tools/KeyGen`
-2. Compila LicenseManager → crea licenza con internet
+1. Genera chiavi dal LicenseManager: menu **Chiavi → Genera chiavi di firma**
+2. Compila LicenseManager → crea licenza (offline, data locale)
 3. Incolla in SmartInterview → deve attivarsi
 4. Crea licenza scaduta ieri → riavvia online → deve chiedere nuova chiave
 
@@ -135,5 +135,6 @@ Se sei offline da più di 72 ore dall’ultimo check online → motore AI fermat
 | Ora online | `Common/uLicenseOnlineTime.pas` |
 | Codec v5 + firma | `Common/uLicenseCodecV5.pas`, `uLicenseEcdsa.pas` |
 | Controllo periodico | `Common/uLicenseMonitor.pas`, timer in `uMainForm.pas` |
-| Gate motore | `Engine/EngineSessionAuth.cs` |
+| Gate motore | `Projects/Engine/EngineSessionAuth.cs` |
 | Emissione chiavi | `LicenseManagerMain.pas`, `uLicenseEcdsaSign.pas` |
+| Generazione chiavi di firma | `Projects/LicenseManager/uLicenseKeyGen.pas` (BCrypt) |

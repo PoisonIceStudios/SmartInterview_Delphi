@@ -22,9 +22,9 @@ SmartInterview_Delphi/
 │   │   ├── SmartInterview.dproj
 │   │   ├── src/                # Unità specifiche SmartInterview
 │   │   └── Win64/Release/      # Output build (gitignored)
-│   └── LicenseManager/         # Tool licenze
+│   ├── LicenseManager/         # Tool licenze (genera anche le chiavi di firma)
+│   └── Engine/                 # Motore C# (.NET 10)
 ├── Common/                     # Unità Pascal condivise
-├── Engine/                     # Motore C# (.NET 10)
 └── docs/                       # Documentazione
 ```
 
@@ -37,7 +37,7 @@ SmartInterview_Delphi/
 Dopo ogni build Win64, il `.dproj` esegue automaticamente:
 
 ```text
-dotnet build Engine\SmartInterview.Engine.csproj -c Release
+dotnet build Projects\Engine\SmartInterview.Engine.csproj -c Release
 ```
 
 Il target MSBuild `DeployEngineToDelphi` copia l'intero output (DLL, dipendenze .NET, runtime nativi CUDA/Vulkan/Whisper) in:
@@ -70,7 +70,7 @@ Se all'avvio compare "Engine not found":
 
 ```powershell
 cd C:\Users\devda\Documents\GitHub\SmartInterview_Delphi
-dotnet build Engine\SmartInterview.Engine.csproj -c Release
+dotnet build Projects\Engine\SmartInterview.Engine.csproj -c Release
 ```
 
 Verificare che esista:

@@ -1,4 +1,4 @@
-﻿unit uFrmSplash;
+unit uFrmSplash;
 
 interface
 
@@ -17,19 +17,25 @@ type
   private
     FStartupOk: Boolean;
     FStartupError: string;
+    FAcceptUiUpdates: Boolean;
+    FMainThreadId: DWORD;
     procedure SetStatusText(const Text: string);
     procedure StartupFinished;
     procedure QueueStatus(const Text: string);
   public
+    procedure ExecuteStartup;
     class procedure RunStartup;
   end;
+
+var
+  FrmSplash: TFrmSplash;
 
 implementation
 
 {$R *.dfm}
 
-uses
-  uTheme;
+var
+  GSplashForm: TFrmSplash = nil;
 
 type
   TMainThreadInvoker = class
@@ -57,21 +63,22 @@ begin
 end;
 
 class procedure TFrmSplash.RunStartup;
-var
-  F: TFrmSplash;
 begin
-  F := TFrmSplash.Create(nil);
-  try
-    F.ShowModal;
-    if F.FStartupOk then
-      Exit;
-    if F.FStartupError <> '' then
-      raise Exception.Create(F.FStartupError)
-    else
-      raise Exception.Create('Startup cancelled.');
-  finally
-    F.Free;
-  end;
+  FrmSplash.ExecuteStartup;
+end;
+
+procedure TFrmSplash.ExecuteStartup;
+begin
+  FStartupOk := False;
+  FStartupError := '';
+  FAcceptUiUpdates := True;
+  ShowModal;
+  if FStartupOk then
+    Exit;
+  if FStartupError <> '' then
+    raise Exception.Create(FStartupError)
+  else
+    raise Exception.Create('Startup cancelled.');
 end;
 
 procedure TFrmSplash.FormCreate(Sender: TObject);
@@ -79,6 +86,9 @@ var
   PngPath: string;
   Png: TPngImage;
 begin
+  GSplashForm := Self;
+  FAcceptUiUpdates := True;
+  FMainThreadId := GetCurrentThreadId;
   FStartupOk := False;
   FStartupError := '';
   PngPath := ExtractFilePath(ParamStr(0)) + 'Resources\splash.png';
@@ -93,27 +103,31 @@ begin
     end;
   end;
   lblStatus.Caption := '';
-  Color := ThemeBase;
-  lblStatus.Font.Name := ThemeFontFamily;
-  lblStatus.Font.Color := ThemeTextDim;
   lblStatus.ParentFont := False;
 end;
 
 procedure TFrmSplash.QueueStatus(const Text: string);
 var
   Msg: string;
-  Invoker: TMainThreadInvoker;
 begin
   Msg := Text;
-  Invoker := TMainThreadInvoker.Create(procedure
+  if GetCurrentThreadId = FMainThreadId then
   begin
-    SetStatusText(Msg);
+    if FAcceptUiUpdates then
+      SetStatusText(Msg);
+    Exit;
+  end;
+  TThread.Queue(nil, procedure
+  begin
+    if (GSplashForm <> nil) and GSplashForm.FAcceptUiUpdates then
+      GSplashForm.SetStatusText(Msg);
   end);
-  TThread.Queue(nil, Invoker.Invoke);
 end;
 
 procedure TFrmSplash.SetStatusText(const Text: string);
 begin
+  if not FAcceptUiUpdates then
+    Exit;
   lblStatus.Caption := Text;
   lblStatus.Update;
 end;
@@ -152,6 +166,7 @@ end;
 
 procedure TFrmSplash.StartupFinished;
 begin
+  Application.ProcessMessages;
   if FStartupOk then
     ModalResult := mrOk
   else
@@ -164,6 +179,9 @@ end;
 
 procedure TFrmSplash.FormDestroy(Sender: TObject);
 begin
+  FAcceptUiUpdates := False;
+  if GSplashForm = Self then
+    GSplashForm := nil;
   imgSplash.Picture := nil;
 end;
 

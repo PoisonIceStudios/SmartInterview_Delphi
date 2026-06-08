@@ -25,6 +25,7 @@ implementation
 uses
   System.Classes,
   System.Math,
+  System.StrUtils,
   Winapi.Windows,
   uRegistryStore,
   uDebugLog;
@@ -140,6 +141,20 @@ begin
     FOnStatus(Text);
 end;
 
+function UserFacingStartupError(const Detail: string): string;
+begin
+  if (Pos(':\', Detail) > 0) or (Pos('\\', Detail) > 0) or
+     ContainsText(Detail, 'Projects') or ContainsText(Detail, 'EngineDeploy') or
+     ContainsText(Detail, 'Win64') or ContainsText(Detail, '.csproj') or
+     ContainsText(Detail, 'dotnet') or ContainsText(Detail, 'net10.0') then
+  begin
+    DebugLogWrite('[Startup] suppressed detail: ' + Detail);
+    Result := 'Startup failed. Restart the application or reinstall.';
+  end
+  else
+    Result := Detail;
+end;
+
 function RunInitialStartup(const OnStatus: TStartupStatusProc): TPipeEngine;
 var
   Engine: TPipeEngine;
@@ -149,8 +164,6 @@ var
   WhisperLevel: TTranscriptionIntelligence;
   AnswerLen: TAnswerLength;
   Bridge: TStartupProgressBridge;
-  EngineRef: TPipeEngine;
-  BridgeRef: TStartupProgressBridge;
 begin
   if GStartupEngine <> nil then
     Exit(GStartupEngine);
@@ -171,14 +184,17 @@ begin
       if Assigned(OnStatus) then
         OnStatus('Starting engine...');
       if not Engine.Start then
-        raise Exception.Create(
-          'Could not start engine process. Build Engine\SmartInterview.Engine.csproj and copy output to Win64\Debug\EngineDeploy\.');
+      begin
+        if Engine.LastError <> '' then
+          raise Exception.Create(Engine.LastError)
+        else
+          raise Exception.Create(EngineErrStartFailed);
+      end;
 
       if Assigned(OnStatus) then
         OnStatus('Connecting...');
       if not Engine.Ping then
-        raise Exception.Create(
-          'Engine process did not respond. Rebuild Engine (dotnet build Engine\SmartInterview.Engine.csproj -c Release) and redeploy to Win64\Debug\EngineDeploy\.');
+        raise Exception.Create(EngineErrNoResponse);
 
       if Assigned(OnStatus) then
         OnStatus('Preparing models...');
@@ -197,27 +213,36 @@ begin
           OnStatus('Preparing models...');
         if not Engine.StartupLegacy(LangCode, LangName, Level, WhisperLevel, Profile.Role, Profile.TechStack,
           Profile.JobDescription, Profile.Experience, AnswerLen, Bridge.HandleProgress, Err) then
-          raise Exception.Create(Err);
+        begin
+          DebugLogWrite('[LOAD] legacy startup failed: ' + Err);
+          raise Exception.Create(UserFacingStartupError(Err));
+        end;
         DebugLogWrite('[LOAD] ready=true (legacy startup)');
       end;
 
       GStartupEngine := Engine;
-      Result := Engine;
-    except
-      Engine.Free;
       Engine := nil;
-      raise;
+      Result := GStartupEngine;
+    except
+      on E: Exception do
+      begin
+        if Assigned(Engine) then
+        begin
+          Engine.OnProgress := nil;
+          FreeAndNil(Engine);
+        end;
+        raise;
+      end;
     end;
   finally
-    EngineRef := Engine;
-    BridgeRef := Bridge;
-    TThread.Queue(nil, procedure
+    if Assigned(Engine) then
     begin
-      if EngineRef <> nil then
-        EngineRef.OnProgress := nil;
-      if BridgeRef <> nil then
-        BridgeRef.Free;
-    end);
+      Engine.OnProgress := nil;
+      FreeAndNil(Engine);
+    end;
+    if GStartupEngine <> nil then
+      GStartupEngine.OnProgress := nil;
+    Bridge.Free;
   end;
 end;
 

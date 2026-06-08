@@ -14,7 +14,7 @@ Audit del sistema di licenze (SmartInterview + LicenseManager + Engine DLL).
 | Integrità chiave licenza v5 | **Forte** | ECDSA P-256, chiave privata solo in LicenseManager |
 | Integrità chiave licenza v4 | OK | HMAC-SHA256 (legacy, ancora accettata) |
 | Segretezza chiave licenza v4 | **Debole** | Segreti simmetrici nel binario client |
-| Nuove emissioni | v5 | `SI5-…` firmate con `tools/KeyGen` |
+| Nuove emissioni | v5 | `SI5-…` firmate dal LicenseManager (chiave privata locale) |
 | Controllo periodico runtime | OK | Ogni 6h tentativo online; grace offline 72h |
 | Binding macchina sulla chiave | No | Solo username forum |
 | Storage locale | Medio | Chiave in chiaro in registry HKCU |
@@ -63,7 +63,7 @@ SmartInterview.dpr
 
 ## 3. Schema crittografico v5 (corrente — ECDSA P-256)
 
-Implementato in `Common/uLicenseCodecV5.pas`, `uLicenseEcdsa.pas`, `Engine/LicenseCodecV5.cs`.
+Implementato in `Common/uLicenseCodecV5.pas`, `uLicenseEcdsa.pas`, `Projects/Engine/LicenseCodecV5.cs`.
 
 | Elemento | Dettaglio |
 |----------|-----------|
@@ -72,7 +72,7 @@ Implementato in `Common/uLicenseCodecV5.pas`, `uLicenseEcdsa.pas`, `Engine/Licen
 | Firma | 64 byte ECDSA P-256 su SHA-256(payload) |
 | Chiave privata | Solo `Projects/LicenseManager/Keys/license_signing.priv` (gitignored) |
 | Chiave pubblica | `uLicensePublicKey.pas` + `LicenseCodecV5.cs` |
-| Generazione coppia | `dotnet run --project tools/KeyGen` |
+| Generazione coppia | LicenseManager → menu **Chiavi → Genera chiavi di firma** (BCrypt) |
 
 **Sicurezza:** senza la chiave privata non si possono creare chiavi valide. La chiave pubblica nel client permette solo verifica.
 
@@ -183,12 +183,12 @@ Flusso: ultimo UTC online noto + tempo monotonic (`GetTickCount64`) → stima sc
 
 ## Riferimenti codice
 
-- Codec v4/v5: `Common/uLicenseCodec.pas`, `Common/uLicenseCodecV5.pas`, `Engine/LicenseCodec.cs`, `Engine/LicenseCodecV5.cs`
+- Codec v4/v5: `Common/uLicenseCodec.pas`, `Common/uLicenseCodecV5.pas`, `Projects/Engine/LicenseCodec.cs`, `Projects/Engine/LicenseCodecV5.cs`
 - Firma/verifica: `Common/uLicenseEcdsa.pas`, `Projects/LicenseManager/uLicenseEcdsaSign.pas`
 - Monitor periodico: `Common/uLicenseMonitor.pas`
-- Ora online: `Common/uLicenseOnlineTime.pas`, `Engine/OnlineTime.cs`
+- Ora online: `Common/uLicenseOnlineTime.pas`, `Projects/Engine/OnlineTime.cs`
 - Servizio licenza: `Projects/SmartInterview/src/uLicenseService.pas`
 - UI attivazione: `Projects/SmartInterview/uFrmLicense.pas` (`EnsureLicensed`, `PromptRelicense`)
 - Emissione: `Projects/LicenseManager/LicenseManagerMain.pas`
-- Auth engine: `Engine/EngineSessionAuth.cs`, `Projects/SmartInterview/src/uSessionAuth.pas`
-- KeyGen: `tools/KeyGen/Program.cs`
+- Auth engine: `Projects/Engine/EngineSessionAuth.cs`, `Projects/SmartInterview/src/uSessionAuth.pas`
+- Generazione chiavi di firma: `Projects/LicenseManager/uLicenseKeyGen.pas` (BCrypt, menu **Chiavi → Genera chiavi di firma**)

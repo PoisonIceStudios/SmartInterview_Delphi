@@ -10,6 +10,11 @@ uses
   uFrmLicense in 'uFrmLicense.pas' {FrmLicense},
   uFrmDisclaimer in 'uFrmDisclaimer.pas' {FrmDisclaimer},
   uFrmInterviewSetup in 'uFrmInterviewSetup.pas' {FrmInterviewSetup},
+  uFrmProfile in 'uFrmProfile.pas' {FrmProfile},
+  uFrmAbout in 'uFrmAbout.pas' {FrmAbout},
+  uFrmSettings in 'uFrmSettings.pas' {FrmSettings},
+  uFrmMicSettings in 'uFrmMicSettings.pas' {FrmMicSettings},
+  uDialogZOrder in 'src\uDialogZOrder.pas',
   uMainForm in 'uMainForm.pas' {MainForm},
   Vcl.Themes,
   Vcl.Styles;
@@ -30,6 +35,21 @@ begin
   Application.MainFormOnTaskbar := True;
   TStyleManager.TrySetStyle('Blue Rock SE');
   Application.Title := 'SmartInterview';
+
+  // Pre-create the design-time dialog forms (still in the project, still editable in the IDE).
+  // IMPORTANT: do NOT use Application.CreateForm here — the FIRST Application.CreateForm call
+  // becomes the application MainForm, and ShowModal on the MainForm before Application.Run
+  // does not close on ModalResult (license dialog would hang on "License activated."). The
+  // engine must also start (in RunStartup) before TMainForm is created, so TMainForm must be
+  // the LAST form created and the only one registered as MainForm.
+  FrmLicense := TFrmLicense.Create(Application);
+  FrmDisclaimer := TFrmDisclaimer.Create(Application);
+  FrmInterviewSetup := TFrmInterviewSetup.Create(Application);
+  FrmProfile := TFrmProfile.Create(Application);
+  FrmSplash := TFrmSplash.Create(Application);
+  FrmAbout := TFrmAbout.Create(Application);
+  FrmSettings := TFrmSettings.Create(Application);
+  FrmMicSettings := TFrmMicSettings.Create(Application);
 
   if not TFrmLicense.EnsureLicensed then
     Halt(0);
