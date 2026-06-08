@@ -56,8 +56,13 @@ begin
 end;
 
 function LicenseEcdsaHash(const Data: TBytes): TBytes;
+var
+  SHA: THashSHA2;
 begin
-  Result := THashSHA2.GetHashBytes(Data);
+  SHA := THashSHA2.Create;
+  if Length(Data) > 0 then
+    SHA.Update(Data);
+  Result := SHA.HashAsBytes;
 end;
 
 end.
