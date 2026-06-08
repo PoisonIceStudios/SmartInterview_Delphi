@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SmartInterview.Engine</AssemblyName>
+    <RootNamespace>SmartInterview.Engine</RootNamespace>
+    <Deterministic>true</Deterministic>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <DefineConstants>$(DefineConstants);DIAGNOSTIC_LOG</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12.Windows" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan.Windows" Version="0.27.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda12" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda12.Windows" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+  </ItemGroup>
+
+  <Target Name="DeployEngineToDelphi" AfterTargets="Build">
+    <PropertyGroup>
+      <_DelphiDeployDir>$(MSBuildProjectDirectory)\..\Win64\$(Configuration)\EngineDeploy\</_DelphiDeployDir>
+      <_DelphiDebugDeployDir>$(MSBuildProjectDirectory)\..\Win64\Debug\EngineDeploy\</_DelphiDebugDeployDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(_DelphiDeployDir)" />
+    <ItemGroup>
+      <_EngineDeployFiles Include="$(OutputPath)**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_EngineDeployFiles)"
+          DestinationFiles="@(_EngineDeployFiles->'$(_DelphiDeployDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="'$(Configuration)'=='Release' and !('$(_DelphiDeployDir)'=='$(_DelphiDebugDeployDir)')"
+          SourceFiles="@(_EngineDeployFiles)"
+          DestinationFiles="@(_EngineDeployFiles->'$(_DelphiDebugDeployDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(_DelphiDeployDir)runtimes\win-x64\native\vulkan\llama.dll')"
+           Text="Engine deploy missing Vulkan backend. Run: dotnet build -c $(Configuration)" />
+    <Error Condition="!Exists('$(_DelphiDeployDir)runtimes\win-x64\native\cuda12\llama.dll')"
+           Text="Engine deploy missing LLama CUDA12 backend. Run: dotnet build -c $(Configuration)" />
+    <Error Condition="!Exists('$(_DelphiDeployDir)runtimes\cuda\win-x64\whisper.dll') and !Exists('$(_DelphiDeployDir)runtimes\cuda12\win-x64\whisper.dll')"
+           Text="Engine deploy missing Whisper CUDA backend (cuda or cuda12). Run: dotnet build -c $(Configuration)" />
+    <Message Importance="high" Text="Engine deployed to $(_DelphiDeployDir)" />
+    <Message Importance="high" Condition="'$(Configuration)'=='Release' and !('$(_DelphiDeployDir)'=='$(_DelphiDebugDeployDir)')"
+             Text="Engine also mirrored to $(_DelphiDebugDeployDir) for Delphi Debug runs." />
+  </Target>
+
+</Project>

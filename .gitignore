@@ -1,0 +1,31 @@
+## Build output
+bin/
+obj/
+Win32/
+Win64/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.exe
+*.dll
+*.dcu
+*.dcp
+*.local
+*.identcache
+*.stat
+*.log
+
+## IDE
+.vs/
+__history/
+__recovery/
+
+## Models (downloaded at runtime)
+models/
+*.bin
+*.gguf
+
+## OS
+Thumbs.db
+.DS_Store
