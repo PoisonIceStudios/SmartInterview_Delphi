@@ -102,6 +102,7 @@ La cartella `Common/` contiene unità `.pas` usate da **più progetti** Delphi n
 | Unità | Descrizione |
 |-------|-------------|
 | `uLicenseCodec.pas` | Codifica/decodifica chiavi licenza v4 (Base32, HMAC, XOR). Usata da SmartInterview e LicenseManager. |
+| `uLicenseOnlineTime.pas` | Fetch ora UTC online (worldtimeapi.org, timeapi.io). Obbligatoria per creazione e verifica licenze. |
 
 ### Search path (.dproj)
 

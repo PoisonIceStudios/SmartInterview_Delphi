@@ -85,7 +85,7 @@ begin
   begin
     GLastCheckError := Err;
     if LicenseCodecTryDecodePayload(Key, Payload, Err) and
-       LicenseCodecIsExpired(Payload, Utc) then
+       (LicenseCodecIsExpired(Payload, Utc) or not Payload.Active) then
       LicenseStoreClear;
     Exit;
   end;

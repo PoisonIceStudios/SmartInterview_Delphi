@@ -22,6 +22,7 @@ SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo tra
 | [Riferimento unità Pascal](docs/pas-reference.md) | Descrizione di ogni file `.pas` |
 | [Motore C# / DLL](docs/csharp-dll.md) | Assembly Engine, protocollo JSON, moduli `.cs` |
 | [Sistema licenze](docs/licensing.md) | Codec v4, attivazione, token sessione, LicenseManager |
+| [Audit sicurezza](docs/security-audit.md) | Ora online, scadenza, crittografia v4, raccomandazioni v5 |
 | [Unità condivise Common](docs/setup.md#common--unità-pascal-condivise) | Convenzioni per `.pas` multi-progetto |
 
 ---

@@ -14,7 +14,7 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 |------------|----------|-------|
 | Codec licenza | `Common/uLicenseCodec.pas` | Encode/decode chiavi 32 caratteri Base32 (8 gruppi × 4) |
 | Servizio app | `uLicenseService.pas` | Validazione, attivazione, storage registry, build token sessione |
-| Ora online | `uLicenseOnlineTime.pas` | Fetch UTC da worldtimeapi.org / timeapi.io |
+| Ora online | `Common/uLicenseOnlineTime.pas` | Fetch UTC da worldtimeapi.org / timeapi.io (app + LicenseManager) |
 | Sessione motore | `uSessionAuth.pas` | Token HMAC v2 + variabili d'ambiente processo figlio |
 | Auth motore C# | `Engine/EngineSessionAuth.cs` | Validazione simmetrica lato DLL |
 | Codec motore C# | `Engine/LicenseCodec.cs` | Mirror validazione licenza nel processo .NET |
@@ -91,14 +91,27 @@ Il token lega **username forum + chiave licenza**, non il fingerprint macchina.
 
 Usato da `uActivationRequest.pas` per codici supporto `RQ1` — **non** partecipa al gate sessione motore.
 
+## Scadenza e riattivazione
+
+Al riavvio, `LicenseIsValid` usa l'ora UTC online. Se la chiave è **scaduta** o **disattivata**:
+
+1. `LicenseStoreClear` rimuove chiave e username dal registry
+2. `TFrmLicense.EnsureLicensed` mostra di nuovo il form di attivazione
+3. Serve una **nuova chiave** dal venditore (la scadenza è incorporata nel payload v4)
+
+Senza connessione internet la validazione fallisce (messaggio offline) — non è possibile aggirare la scadenza modificando l'orologio di sistema.
+
 ## LicenseManager (tool interno)
 
 Utility separata per venditori/admin:
 
+- **Richiede internet** per creare licenze (`TryFetchUtcNow` prima di ogni emissione)
 - Crea licenze con username, scadenza (o lifetime), flag active
-- Preset rapidi: 1/3/6/12 mesi
+- Preset rapidi: 1/3/6/12 mesi (basati sulla data UTC online, non sull'orologio locale)
 - Salva elenco in `licenses.json` accanto all'exe
 - Decode/visualizza payload chiavi esistenti
+
+Vedi anche [Audit sicurezza](security-audit.md) per valutazione crittografica e raccomandazioni v5.
 
 ### Build
 

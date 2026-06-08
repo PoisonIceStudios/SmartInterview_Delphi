@@ -11,6 +11,7 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 | Unità | Descrizione |
 |-------|-------------|
 | `uLicenseCodec.pas` | Codec chiavi licenza v4: encode/decode Base32, payload 20 byte, HMAC-SHA256, XOR keystream. Espone `LicenseCodecEncode`, `LicenseCodecTryValidate`, `LicenseCodecTryDecodePayload`, costanti `LicenseKeyChars`, `LicenseMaxUsernameLen`. |
+| `uLicenseOnlineTime.pas` | `TryFetchUtcNow`: ora UTC da API HTTPS (worldtimeapi, timeapi.io). Usata da SmartInterview e LicenseManager. |
 
 ---
 
@@ -78,7 +79,6 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 | Unità | Descrizione |
 |-------|-------------|
 | `uLicenseService.pas` | API licenza applicazione: `LicenseIsValid`, `LicenseTryActivate`, `LicenseBuildSessionToken`, storage registry. |
-| `uLicenseOnlineTime.pas` | Fetch ora UTC online (worldtimeapi.org, timeapi.io) per anti-manomissione data di scadenza. |
 | `uSessionAuth.pas` | Token sessione motore `SI_SESSION.v2`: HMAC-SHA256, variabili d'ambiente processo figlio, expiry 24h. |
 | `uMachineFingerprint.pas` | Fingerprint macchina via WMI (CPU, board, disk) + Base32 per codici richiesta attivazione. |
 | `uActivationRequest.pas` | Codice richiesta attivazione `RQ1` (JSON base64url con fingerprint + username). |

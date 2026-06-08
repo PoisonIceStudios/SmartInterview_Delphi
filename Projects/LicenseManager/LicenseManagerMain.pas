@@ -52,7 +52,8 @@ implementation
 {$R *.dfm}
 
 uses
-  uLicenseCodec;
+  uLicenseCodec,
+  uLicenseOnlineTime;
 
 procedure TFrmLicenseManagerMain.FormCreate(Sender: TObject);
 begin
@@ -65,7 +66,7 @@ begin
   UpdateExpiryControls;
   RefreshList;
   lblHint.Caption := Format(
-    'Max username %d chars. Keys are %d chars (8x4). Expiry is embedded in the key (online verification in app).',
+    'Max username %d chars. Keys are %d chars (8x4). Internet required to create keys (online UTC). App verifies online too.',
     [LicenseMaxUsernameLen, LicenseKeyChars]);
   SetStatus(Format('Loaded %d license(s). Data: %s', [FRecords.Count, TLicenseRecordStore.DataFilePath]), True);
 end;
@@ -98,10 +99,19 @@ begin
 end;
 
 procedure TFrmLicenseManagerMain.ApplyMonthPreset(Months: Integer);
+var
+  Utc, LocalNow: TDateTime;
+  Err: string;
 begin
+  if not TryFetchUtcNow(Utc, Err) then
+  begin
+    SetStatus(Err, False);
+    Exit;
+  end;
+  LocalNow := TTimeZone.Local.ToLocalTime(Utc);
   chkLifetime.Checked := False;
   UpdateExpiryControls;
-  dtpExpiry.Date := IncMonth(Date, Months);
+  dtpExpiry.Date := IncMonth(DateOf(LocalNow), Months);
 end;
 
 procedure TFrmLicenseManagerMain.btnPresetClick(Sender: TObject);
@@ -179,6 +189,12 @@ begin
     Exit;
   end;
 
+  if not TryFetchUtcNow(Utc, Err) then
+  begin
+    SetStatus(Err, False);
+    Exit;
+  end;
+
   Existing := FindByUsername(UserNorm);
   if Existing <> nil then
   begin
@@ -200,7 +216,6 @@ begin
     end;
   end;
 
-  Utc := TTimeZone.Local.ToUniversalTime(Now);
   if not LicenseCodecTryValidate(Key, UserNorm, Utc, Err) then
   begin
     SetStatus('Generated key failed validation: ' + Err, False);
@@ -216,7 +231,7 @@ begin
   Entry := TLicenseEntry.Create;
   Entry.Username := UserNorm;
   Entry.LicenseKey := Key;
-  Entry.Registered := Now;
+  Entry.Registered := TTimeZone.Local.ToLocalTime(Utc);
   Entry.ExpiryLabel := LicenseCodecFormatExpiry(Payload);
   Entry.Lifetime := Payload.Lifetime;
   Entry.ExpiryDate := LicenseCodecExpiryToDate(Payload.ExpiryUnixDay);
