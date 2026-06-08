@@ -100,11 +100,19 @@ Catalogs: `Engine/ModelCatalog.cs`, `Engine/WhisperModelCatalog.cs` (mirrored in
 
 **Requirements:** RAD Studio 12+ (Delphi Win64), .NET SDK 10, Windows x64.
 
-```powershell
+Open `SmartInterview.dproj` in RAD Studio and build **Win64**. After each Delphi build, MSBuild automatically runs:
+
+```text
 dotnet build Engine\SmartInterview.Engine.csproj -c Release
 ```
 
-This deploys the engine to `Win64\Debug\EngineDeploy\` and `Win64\Release\EngineDeploy\`. Then open `SmartInterview.dproj` in RAD Studio and build Win64.
+That deploys `SmartInterview.Engine.exe` (and GPU runtimes) to `Win64\Debug\EngineDeploy\` and `Win64\Release\EngineDeploy\` next to `SmartInterview.exe`. The app looks for the engine there first.
+
+If startup says "Engine not found", build once manually:
+
+```powershell
+dotnet build Engine\SmartInterview.Engine.csproj -c Release
+```
 
 ---
 
