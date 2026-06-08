@@ -13,6 +13,7 @@ internal static class Program
     private static readonly Transcriber Transcriber = new();
     private static readonly LocalLlmClient Llm = new();
     private static CancellationTokenSource? _streamCts;
+    private static bool _authInitialized;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -40,6 +41,12 @@ internal static class Program
         Console.InputEncoding = System.Text.Encoding.UTF8;
         Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+        if (!EngineSessionAuth.TryAuthenticateFromEnvironment(out var authErr))
+            LogEngine($"Session auth failed at startup: {authErr ?? "unknown"}");
+        else
+            LogEngine("Session authenticated from environment.");
+        _authInitialized = true;
+
         string? line;
         while ((line = await Console.In.ReadLineAsync()) != null)
         {
@@ -62,6 +69,12 @@ internal static class Program
 
     private static async Task HandleAsync(string? cmd, int id, JsonElement root)
     {
+        if (cmd is not ("shutdown" or null) && _authInitialized && !EngineSessionAuth.IsAuthenticated)
+        {
+            Reply(id, new { ok = false, error = "unauthorized" });
+            return;
+        }
+
         switch (cmd)
         {
             case "ping":
@@ -74,6 +87,13 @@ internal static class Program
 
             case "startup":
             {
+                var sessionToken = root.TryGetProperty("session_token", out var st) ? st.GetString() : null;
+                if (!EngineSessionAuth.TryConfirmStartupToken(sessionToken, out var tokenErr))
+                {
+                    Reply(id, new { ok = false, error = tokenErr ?? "unauthorized" });
+                    break;
+                }
+
                 var lang = root.TryGetProperty("lang_code", out var lc) ? lc.GetString() ?? "en" : "en";
                 var langName = root.TryGetProperty("lang_name", out var ln) ? ln.GetString() ?? "English" : "English";
                 var level = root.TryGetProperty("intelligence", out var il) ? (ResponseIntelligence)il.GetInt32() : ResponseIntelligence.Balanced;

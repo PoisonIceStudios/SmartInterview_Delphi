@@ -7,6 +7,7 @@ uses
 
 function LicenseMachineCode: string;
 function LicenseIsValid: Boolean;
+function LicenseBuildSessionToken: string;
 function LicenseBuildActivationRequest(const ForumUsername: string): string;
 function LicenseTryActivate(const LicenseKey, ForumUsername: string; out ErrorMsg: string): Boolean;
 
@@ -21,7 +22,8 @@ uses
   uMachineFingerprint,
   uLicenseCodec,
   uActivationRequest,
-  uRegistryStore;
+  uRegistryStore,
+  uSessionAuth;
 
 const
   KeyName = 'LicenseKey';
@@ -65,6 +67,16 @@ begin
     Exit(False);
   StoredUser := LicenseStoreGetForumUsername;
   Result := LicenseCodecTryValidate(Key, StoredUser, Payload, Err);
+end;
+
+function LicenseBuildSessionToken: string;
+var
+  Key: string;
+begin
+  if not LicenseIsValid then
+    raise Exception.Create('License is not valid.');
+  Key := LicenseStoreGet;
+  Result := SessionBuildToken(MachineNormalizedRequestCode, Key);
 end;
 
 function LicenseBuildActivationRequest(const ForumUsername: string): string;

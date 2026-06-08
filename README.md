@@ -41,6 +41,17 @@ Models are not in the repo. First run downloads to `<exe>\models` or `%LOCALAPPD
    - `ping` → `startup` IPC: download/load Whisper + LLM, warm-up, apply profile.
 3. **Main form** reuses the engine from splash.
 
+### Engine license handshake
+
+`SmartInterview.exe` must spawn `SmartInterview.Engine.exe`; the engine refuses AI IPC unless Delphi passes a valid session token.
+
+1. Delphi builds `SI_SESSION.v1.<expiry>.<machineId>.<hmac>` from the stored license + machine fingerprint (`src/uSessionAuth.pas`).
+2. On `TPipeEngine.Start`, Delphi sets child env vars `SMARTINTERVIEW_SESSION` and `SMARTINTERVIEW_LICENSE`.
+3. Engine validates HMAC + machine + expiry (`Engine/EngineSessionAuth.cs`) before handling any command (including `ping`).
+4. `startup` IPC also sends `session_token` for redundancy; it must match the env token.
+
+Debug Engine builds (`DIAGNOSTIC_LOG`) allow running without env vars for local dotnet testing.
+
 ---
 
 ## Runtime

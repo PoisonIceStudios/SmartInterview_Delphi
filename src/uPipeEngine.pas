@@ -40,6 +40,7 @@ type
     FOnProgress: TPipeProgressEvent;
     FOnToken: TPipeTokenEvent;
     FOnTranscribePart: TPipeTranscribePartEvent;
+    FSessionToken: string;
     FReadBuf: TBytes;
     FReadBufLen: Integer;
     procedure EnsureReadCapacity(Need: Integer);
@@ -109,7 +110,9 @@ uses
   System.IOUtils,
   System.Math,
   System.NetEncoding,
-  uDebugLog;
+  uDebugLog,
+  uLicenseService,
+  uSessionAuth;
 
 type
   TPipeReaderThread = class(TThread)
@@ -339,14 +342,19 @@ end;
 
 function TPipeEngine.Start: Boolean;
 var
-  Exe, Dll, WorkDir, CmdLine: string;
+  Exe, Dll, WorkDir, CmdLine, LicenseKey: string;
   SI: TStartupInfo;
   SecAttr: TSecurityAttributes;
   StdInRead, StdOutWrite: THandle;
+  ChildEnv: PChar;
 begin
   Result := False;
   if FRunning then
     Exit(True);
+  FSessionToken := LicenseBuildSessionToken;
+  LicenseKey := LicenseStoreGet;
+  ChildEnv := SessionBuildChildEnvironment(FSessionToken, LicenseKey);
+  try
   Exe := FindEngineExe;
   if FileExists(Exe) then
   begin
@@ -385,7 +393,7 @@ begin
   SI.hStdError := StdOutWrite;
   SI.wShowWindow := SW_HIDE;
 
-  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True, CREATE_NO_WINDOW, nil,
+  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True, CREATE_NO_WINDOW, ChildEnv,
     PChar(WorkDir), SI, FProcessInfo) then
   begin
     CloseHandle(StdInRead);
@@ -403,6 +411,9 @@ begin
   FReaderThread.Start;
   FRunning := True;
   Result := True;
+  finally
+    FreeMem(ChildEnv);
+  end;
 end;
 
 procedure TPipeEngine.ClearAllPending;
@@ -884,6 +895,8 @@ begin
         Req.AddPair('tech_stack', TechStack);
         Req.AddPair('job_description', JobDesc);
         Req.AddPair('experience', Experience);
+        if FSessionToken <> '' then
+          Req.AddPair('session_token', FSessionToken);
         Result := Req.ToJSON;
       finally
         Req.Free;
