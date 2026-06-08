@@ -11,7 +11,8 @@ uses
   uFrmDisclaimer in 'uFrmDisclaimer.pas' {FrmDisclaimer},
   uFrmInterviewSetup in 'uFrmInterviewSetup.pas' {FrmInterviewSetup},
   uMainForm in 'uMainForm.pas' {MainForm},
-  uTheme in 'src\uTheme.pas';
+  Vcl.Themes,
+  Vcl.Styles;
 
 {$R *.res}
 
@@ -27,7 +28,7 @@ begin
 
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
-  ApplyApplicationTheme;
+  TStyleManager.TrySetStyle('Blue Rock SE');
   Application.Title := 'SmartInterview';
 
   if not TFrmLicense.EnsureLicensed then

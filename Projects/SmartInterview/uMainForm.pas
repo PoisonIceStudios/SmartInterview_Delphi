@@ -496,11 +496,9 @@ end;
 
 procedure TMainForm.StyleForm;
 begin
-  DoubleBuffered := True;
   Color := ThemeBase;
   Font.Name := ThemeFontFamily;
   Font.Color := ThemeText;
-  pnlTitleBar.DoubleBuffered := True;
   pnlTitleBar.Color := ThemeTitleBar;
   pnlIndicators.Color := ThemeTitleBar;
   pnlTitleButtons.Color := ThemeTitleBar;
