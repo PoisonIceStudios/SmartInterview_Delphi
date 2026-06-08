@@ -8,7 +8,8 @@ uses
   Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Menus, Vcl.Buttons, Vcl.Imaging.pngimage,
   uTitleIndicators, uPipeEngine, uAudioCapture, uWasapi16k, uMicCapture,
   uVoiceSegmenter, uReadAlongMatcher, uGlobalKeyboardHook, uInterviewProfile,
-  uAppSettings, uRegistryStore, uMicDevices, uModelCat, uWhisperCat, uFrmSettings, uLiveTransDiag;
+  uAppSettings, uRegistryStore, uMicDevices, uModelCat, uWhisperCat, uFrmSettings, uLiveTransDiag,
+  uLicenseMonitor;
 
 type
   TScrollMode = (smOff, smAuto, smVoice);
@@ -173,6 +174,8 @@ type
     procedure tmrAnimTimer(Sender: TObject);
     procedure tmrIconTimer(Sender: TObject);
     procedure tmrEngineTimer(Sender: TObject);
+    procedure tmrLicenseTimer(Sender: TObject);
+    procedure HandleLicensePeriodicResult(const Res: TLicensePeriodicResult; const Msg: string);
     procedure pbWaveformPaint(Sender: TObject);
     procedure pbMicPaint(Sender: TObject);
   private
@@ -219,6 +222,8 @@ type
     FReadBusy: Boolean;
     FEnginePingFails: Integer;
     FEnginePingBusy: Boolean;
+    FLicenseTimer: TTimer;
+    FLicenseCheckBusy: Boolean;
     FProgressLastUpdate: Int64;
     FStreamBuf: string;
     FStreamAnswer: string;
@@ -318,8 +323,8 @@ implementation
 
 uses
   System.IOUtils,
-  uFrmProfile, uFrmAbout, uFrmInterviewSetup,
-  uTheme, uAppStartup, uRichEditFmt, uDebugLog;
+  uFrmProfile, uFrmAbout, uFrmInterviewSetup, uFrmLicense,
+  uTheme, uAppStartup, uRichEditFmt, uDebugLog, uLicenseService;
 
 const
   SkipMarker = '[[SKIP]]';
@@ -699,6 +704,11 @@ begin
   FHiddenFromCapture := not ParamHasShowFlag;
   FEnginePingFails := 0;
   FEnginePingBusy := False;
+  FLicenseCheckBusy := False;
+  FLicenseTimer := TTimer.Create(Self);
+  FLicenseTimer.Interval := 30 * 60 * 1000;
+  FLicenseTimer.OnTimer := tmrLicenseTimer;
+  FLicenseTimer.Enabled := True;
   FReady := True;
   FModelBusy := False;
   FModelLock := TCriticalSection.Create;
@@ -2501,6 +2511,47 @@ begin
   BringToFront;
 end;
 
+procedure TMainForm.HandleLicensePeriodicResult(const Res: TLicensePeriodicResult; const Msg: string);
+begin
+  case Res of
+    lprOk, lprOfflineOk:
+      ;
+    lprExpired, lprInvalid, lprNoLicense:
+      begin
+        FEngine.Stop;
+        LicenseStoreClear;
+        if not TFrmLicense.PromptRelicense then
+        begin
+          if Msg <> '' then
+            MessageDlg(Msg, mtWarning, [mbOK], 0);
+          Application.Terminate;
+        end;
+      end;
+    lprOfflineBlocked:
+      begin
+        FEngine.Stop;
+        if Msg <> '' then
+          SetStatus(Msg);
+      end;
+  end;
+end;
+
+procedure TMainForm.tmrLicenseTimer(Sender: TObject);
+var
+  Msg: string;
+  Res: TLicensePeriodicResult;
+begin
+  if FShuttingDown or not FReady or FLicenseCheckBusy then
+    Exit;
+  FLicenseCheckBusy := True;
+  try
+    Res := LicensePeriodicRevalidate(Msg);
+    HandleLicensePeriodicResult(Res, Msg);
+  finally
+    FLicenseCheckBusy := False;
+  end;
+end;
+
 procedure TMainForm.tmrEngineTimer(Sender: TObject);
 begin
   if not FReady or FModelBusy or FEnginePingBusy then Exit;
@@ -2532,6 +2583,8 @@ begin
   tmrAnim.Enabled := False;
   tmrIcon.Enabled := False;
   tmrEngine.Enabled := False;
+  if FLicenseTimer <> nil then
+    FLicenseTimer.Enabled := False;
   FEngine.CancelGeneration;
   Action := caFree;
 end;

@@ -3,12 +3,14 @@ unit uLicenseService;
 interface
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  uLicenseMonitor;
 
 function LicenseIsValid: Boolean;
 function LicenseBuildSessionToken: string;
 function LicenseTryActivate(const LicenseKey, ForumUsername: string; out ErrorMsg: string): Boolean;
 function LicenseLastCheckError: string;
+function LicensePeriodicRevalidate(out ErrorMsg: string): TLicensePeriodicResult;
 
 procedure LicenseStoreSave(const LicenseKey, ForumUsername: string);
 function LicenseStoreGet: string;
@@ -90,7 +92,14 @@ begin
     Exit;
   end;
 
+  LicenseMonitorNoteOnlineSuccess(Utc);
+  LicenseMonitorPersistAnchor(Utc, StoredUser, Key);
   Result := True;
+end;
+
+function LicensePeriodicRevalidate(out ErrorMsg: string): TLicensePeriodicResult;
+begin
+  Result := LicenseMonitorPeriodicCheck(ErrorMsg);
 end;
 
 function LicenseBuildSessionToken: string;
@@ -136,6 +145,8 @@ begin
     Exit(False);
   end;
 
+  LicenseMonitorNoteOnlineSuccess(Utc);
+  LicenseMonitorPersistAnchor(Utc, User, Trim(LicenseKey));
   Result := True;
 end;
 

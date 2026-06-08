@@ -26,6 +26,7 @@ type
     procedure StyleForm;
   public
     class function EnsureLicensed: Boolean;
+    class function PromptRelicense: Boolean;
   end;
 
 implementation
@@ -34,6 +35,20 @@ implementation
 
 uses
   uTheme, uLicenseService;
+
+class function TFrmLicense.PromptRelicense: Boolean;
+var
+  F: TFrmLicense;
+begin
+  F := TFrmLicense.Create(nil);
+  try
+    Result := F.ShowModal = mrOK;
+    if Result then
+      Result := LicenseIsValid;
+  finally
+    F.Free;
+  end;
+end;
 
 class function TFrmLicense.EnsureLicensed: Boolean;
 var

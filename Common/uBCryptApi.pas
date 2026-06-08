@@ -1,6 +1,6 @@
 unit uBCryptApi;
 
-{ Minimal bcrypt.dll bindings for ECDSA P-256 license verification (Delphi 12). }
+{ Minimal bcrypt.dll bindings for ECDSA P-256 (Delphi 12). }
 
 interface
 
@@ -14,6 +14,7 @@ type
 const
   BcryptLib = 'bcrypt.dll';
   BCRYPT_ECDSA_PUBLIC_P256_MAGIC = $31534345;
+  BCRYPT_ECDSA_PRIVATE_P256_MAGIC = $32534345;
   BCRYPT_ECDSA_P256_ALGORITHM = 'ECDSA_P256';
   BCRYPT_ECCPUBLIC_BLOB = 'ECCPUBLICBLOB';
   BCRYPT_ECCPRIVATE_BLOB = 'ECCPRIVATEBLOB';

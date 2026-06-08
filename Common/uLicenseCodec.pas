@@ -18,7 +18,12 @@ type
     Active: Boolean;
     Lifetime: Boolean;
     ExpiryUnixDay: UInt32;
+    IssuedUnixDay: UInt32;
+    Version: Byte;
   end;
+
+function LicenseCodecEncodeBase32(const Data: TBytes; Chars: Integer): string;
+function LicenseCodecDecodeBase32(const Encoded: string; OutBytes: Integer): TBytes;
 
 function LicenseNormalizeUsername(const Username: string): string;
 function LicenseCodecNormalizeKey(const LicenseKey: string): string;
@@ -45,7 +50,8 @@ uses
   System.Classes,
   System.DateUtils,
   System.Hash,
-  System.NetEncoding;
+  System.NetEncoding,
+  uLicenseCodecV5;
 
 const
   LicenseHmacSecret = 'SmartInterview|License|v4|hmac';
@@ -123,7 +129,7 @@ begin
   Move(Stream[0], Result[0], LicensePayloadBytes);
 end;
 
-function EncodeBase32(const Data: TBytes; Chars: Integer): string;
+function LicenseCodecEncodeBase32(const Data: TBytes; Chars: Integer): string;
 var
   Buffer, Bits, I, B: Integer;
 begin
@@ -150,7 +156,7 @@ begin
   end;
 end;
 
-function DecodeBase32(const Encoded: string; OutBytes: Integer): TBytes;
+function LicenseCodecDecodeBase32(const Encoded: string; OutBytes: Integer): TBytes;
 var
   Buffer, Bits, OutLen, I, Idx: Integer;
   C: Char;
@@ -262,6 +268,8 @@ begin
   Payload.Active := (Flags and LicenseFlagActive) <> 0;
   Payload.Lifetime := (Flags and LicenseFlagLifetime) <> 0;
   Payload.ExpiryUnixDay := ExpiryUnixDay;
+  Payload.IssuedUnixDay := 0;
+  Payload.Version := 4;
 
   CanonStr := Payload.ForumUsername + '|' + IntToStr(ExpiryUnixDay) + '|' + IntToStr(Flags);
   Canonical := TEncoding.UTF8.GetBytes(CanonStr);
@@ -310,7 +318,7 @@ begin
 
   Plain := BuildPlaintext(UserUtf8, Flags, ExpiryUnixDay);
   Cipher := XorCipher(Plain);
-  Raw := EncodeBase32(Cipher, LicenseKeyChars);
+  Raw := LicenseCodecEncodeBase32(Cipher, LicenseKeyChars);
   Result := LicenseCodecFormatKey(Raw);
 end;
 
@@ -324,6 +332,9 @@ begin
   ErrorMsg := '';
   Result := False;
 
+  if LicenseCodecIsV5Key(LicenseKey) then
+    Exit(LicenseCodecTryDecodePayloadV5(LicenseKey, Payload, ErrorMsg));
+
   Normalized := LicenseCodecNormalizeKey(LicenseKey);
   if Length(Normalized) <> LicenseKeyChars then
   begin
@@ -332,7 +343,7 @@ begin
   end;
 
   try
-    Cipher := DecodeBase32(Normalized, LicensePayloadBytes);
+    Cipher := LicenseCodecDecodeBase32(Normalized, LicensePayloadBytes);
     Plain := XorCipher(Cipher);
     Result := TryParsePlaintext(Plain, Payload, ErrorMsg);
   except
@@ -361,6 +372,9 @@ var
 begin
   ErrorMsg := '';
   Result := False;
+
+  if LicenseCodecIsV5Key(LicenseKey) then
+    Exit(LicenseCodecTryValidateV5(LicenseKey, ExpectedUsername, UtcNow, ErrorMsg));
 
   Expected := LicenseNormalizeUsername(ExpectedUsername);
   if Expected = '' then

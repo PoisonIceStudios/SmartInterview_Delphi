@@ -53,7 +53,10 @@ implementation
 
 uses
   uLicenseCodec,
-  uLicenseOnlineTime;
+  uLicenseCodecV5,
+  uLicenseOnlineTime,
+  uLicenseEcdsa,
+  uLicenseEcdsaSign;
 
 procedure TFrmLicenseManagerMain.FormCreate(Sender: TObject);
 begin
@@ -173,6 +176,7 @@ var
   Entry, Existing: TLicenseEntry;
   Utc: TDateTime;
   Payload: TLicensePayload;
+  PayloadBytes, Hash, Sig: TBytes;
 begin
   UserNorm := LicenseNormalizeUsername(edtUsername.Text);
   if UserNorm = '' then
@@ -207,7 +211,11 @@ begin
   end;
 
   try
-    Key := LicenseCodecEncode(UserNorm, dtpExpiry.Date, chkLifetime.Checked, chkActive.Checked);
+    PayloadBytes := LicenseCodecBuildPayloadV5(UserNorm, dtpExpiry.Date, Utc,
+      chkLifetime.Checked, chkActive.Checked);
+    Hash := LicenseEcdsaHash(PayloadBytes);
+    Sig := LicenseEcdsaSignHash(Hash);
+    Key := LicenseCodecFormatSignedKeyV5(PayloadBytes, Sig);
   except
     on E: Exception do
     begin

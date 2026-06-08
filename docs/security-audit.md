@@ -9,8 +9,11 @@ Audit del sistema di licenze (SmartInterview + LicenseManager + Engine DLL), agg
 | Ora online obbligatoria (app) | OK | `TryFetchUtcNow` in attivazione e validazione |
 | Ora online obbligatoria (LicenseManager) | OK | Creazione chiavi bloccata senza internet |
 | Licenza scaduta al riavvio | OK | Registry pulito → schermata attivazione |
-| Integrità chiave licenza | OK | HMAC-SHA256 su payload canonico |
-| Segretezza chiave licenza | **Debole** | Segreti simmetrici nel binario client |
+| Integrità chiave licenza v5 | **Forte** | ECDSA P-256, chiave privata solo in LicenseManager |
+| Integrità chiave licenza v4 | OK | HMAC-SHA256 (legacy, ancora accettata) |
+| Segretezza chiave licenza v4 | **Debole** | Segreti simmetrici nel binario client |
+| Nuove emissioni | v5 | `SI5-…` firmate con `tools/KeyGen` |
+| Controllo periodico runtime | OK | Ogni 6h tentativo online; grace offline 72h |
 | Binding macchina sulla chiave | No | Solo username forum |
 | Storage locale | Medio | Chiave in chiaro in registry HKCU |
 | Gate engine (DLL) | OK | `EngineSessionAuth` + ora online + licenza |

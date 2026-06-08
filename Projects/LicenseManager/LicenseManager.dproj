@@ -105,6 +105,13 @@
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
+    <Target Name="CopySigningKey" AfterTargets="Build">
+        <MakeDir Directories="$(MSBuildProjectDirectory)\Win64\$(Config)\Keys" />
+        <Copy SourceFiles="$(MSBuildProjectDirectory)\Keys\license_signing.priv"
+              DestinationFolder="$(MSBuildProjectDirectory)\Win64\$(Config)\Keys\"
+              SkipUnchangedFiles="true"
+              Condition="Exists('$(MSBuildProjectDirectory)\Keys\license_signing.priv')" />
+    </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
 </Project>

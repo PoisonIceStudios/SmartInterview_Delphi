@@ -4,7 +4,7 @@
 
 ## Panoramica
 
-SmartInterview usa licenze offline embedded nella chiave (formato **v4**), con verifica dell'ora di scadenza tramite **ora UTC online** (anti-manomissione data di sistema).
+SmartInterview usa licenze offline embedded nella chiave. Le **nuove** licenze usano il formato **v5** (`SI5-…`, firma ECDSA P-256). Le chiavi **v4** legacy (32 caratteri senza prefisso) restano accettate. La scadenza si verifica con **ora UTC online** (anti-manomissione data di sistema).
 
 La licenza valida è **prerequisito** per avviare il motore AI: senza autenticazione sessione, `SmartInterview.Engine.dll` rifiuta tutti i comandi.
 
@@ -22,7 +22,15 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 | Richiesta attivazione | `uActivationRequest.pas` | Codice `RQ1` per supporto venditori |
 | Tool admin | `LicenseManager.exe` | Generazione e gestione licenze |
 
-## Formato chiave v4
+## Formato chiave v5 (corrente)
+
+- Prefisso **`SI5-`**, 34 gruppi da 4 caratteri Base32 (~136 caratteri payload+firma)
+- Payload 21 byte: magic `$55`, flags, scadenza (giorno UTC), **data emissione** (giorno UTC), username (max 10)
+- Firma **ECDSA P-256** 64 byte sulla SHA-256 del payload
+- Chiave **privata** solo in `Projects/LicenseManager/Keys/license_signing.priv` (generare con `dotnet run --project tools/KeyGen`)
+- Chiave **pubblica** embedded in app ed engine (`uLicensePublicKey.pas`, `LicenseCodecV5.cs`)
+
+## Formato chiave v4 (legacy)
 
 - **32 caratteri** Base32 (alfabeto senza I/L/O/U), formattati come `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`
 - Payload 20 byte: magic `$54`, flags (active/lifetime), expiry Unix day, username (max 10 char), HMAC tail
@@ -100,6 +108,16 @@ Al riavvio, `LicenseIsValid` usa l'ora UTC online. Se la chiave è **scaduta** o
 3. Serve una **nuova chiave** dal venditore (la scadenza è incorporata nel payload v4)
 
 Senza connessione internet la validazione fallisce (messaggio offline) — non è possibile aggirare la scadenza modificando l'orologio di sistema.
+
+## Controllo periodico (app aperta)
+
+Con l'app in esecuzione:
+
+- Ogni **30 minuti** viene valutato se serve un re-check (soglia effettiva **6 ore** dall'ultimo controllo).
+- **Online:** verifica completa con ora UTC; se scaduta → stop engine, pulizia registry, form attivazione.
+- **Offline:** stima UTC da ultimo ancoraggio online + tempo monotonic; fino a **72 ore** senza internet l'uso continua; oltre → engine fermato finché non torna la rete.
+
+Non serve essere online ogni 24 ore se la licenza non è scaduta: serve un check online periodico per aggiornare l'ancoraggio e rilevare la scadenza reale.
 
 ## LicenseManager (tool interno)
 

@@ -9,6 +9,8 @@ internal readonly struct LicensePayload
     public bool Active { get; init; }
     public bool Lifetime { get; init; }
     public uint ExpiryUnixDay { get; init; }
+    public uint IssuedUnixDay { get; init; }
+    public byte Version { get; init; }
 }
 
 internal static class LicenseCodec
@@ -66,6 +68,9 @@ internal static class LicenseCodec
         payload = default;
         error = null;
 
+        if (LicenseCodecV5.IsV5Key(licenseKey))
+            return LicenseCodecV5.TryDecodePayload(licenseKey, out payload, out error);
+
         var normalized = NormalizeKey(licenseKey);
         if (normalized.Length != KeyChars)
         {
@@ -95,6 +100,9 @@ internal static class LicenseCodec
             error = "Enter your forum username.";
             return false;
         }
+
+        if (LicenseCodecV5.IsV5Key(licenseKey))
+            return LicenseCodecV5.TryValidate(licenseKey, expectedUsername, utcNow, out error);
 
         if (!TryDecodePayload(licenseKey, out var payload, out error))
             return false;
@@ -228,7 +236,9 @@ internal static class LicenseCodec
             ForumUsername = userNorm,
             Active = (flags & FlagActive) != 0,
             Lifetime = (flags & FlagLifetime) != 0,
-            ExpiryUnixDay = expiryUnixDay
+            ExpiryUnixDay = expiryUnixDay,
+            IssuedUnixDay = 0,
+            Version = 4
         };
 
         var canon = $"{userNorm}|{expiryUnixDay}|{flags}";

@@ -29,3 +29,6 @@ models/
 ## OS
 Thumbs.db
 .DS_Store
+
+## License signing (private key never commit)
+**/license_signing.priv
