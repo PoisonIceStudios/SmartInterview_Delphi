@@ -50,8 +50,7 @@
         <DCC_F>false</DCC_F>
         <DCC_K>false</DCC_K>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
-        <Icon_MainIcon>Resources\app.ico</Icon_MainIcon>
-        <DCC_UnitSearchPath>src\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\Common\;src\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
         <SanitizedProjectName>SmartInterview</SanitizedProjectName>
@@ -128,12 +127,6 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="Resources\app.ico" Configuration="Release" Class="ProjectFile">
-                    <Platform Name="Win64">
-                        <RemoteDir>Resources\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
                 <DeployFile LocalName="Win32\Debug\SmartInterview.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>SmartInterview.exe</RemoteName>
@@ -1115,10 +1108,9 @@
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
     <Target Name="CopyResources" AfterTargets="Build" Condition="'$(Platform)'=='Win64'">
         <MakeDir Directories="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources"/>
-        <Copy SourceFiles="$(MSBuildProjectDirectory)\Resources\app.ico" DestinationFolder="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources\" SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\Resources\app.ico')"/>
     </Target>
     <Target Name="BuildEngineDeploy" AfterTargets="CopyResources" Condition="'$(Platform)'=='Win64'">
         <Message Importance="high" Text="Building SmartInterview.Engine and deploying to Win64\$(Configuration)\EngineDeploy\..."/>
-        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\Engine\SmartInterview.Engine.csproj&quot; -c Release" IgnoreExitCode="false"/>
+        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\..\Engine\SmartInterview.Engine.csproj&quot; -c Release" IgnoreExitCode="false"/>
     </Target>
 </Project>

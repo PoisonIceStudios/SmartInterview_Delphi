@@ -1,141 +1,150 @@
-# SmartInterview (Delphi)
+# SmartInterview
 
-Windows desktop copilot for live technical interviews. Captures system audio (optional mic), transcribes locally with Whisper, streams answers from a local Qwen2.5 GGUF model. No cloud API during interviews.
+**Copilota AI locale per colloqui tecnici su Windows.**
 
-**Stack:** Delphi 12 VCL (Win64) + .NET 10 subprocess (`SmartInterview.Engine.exe`) for Whisper.net and LLamaSharp.
+SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo trascrive in locale con **Whisper**, e genera risposte in streaming da un modello **Qwen2.5** (GGUF) — tutto **senza API cloud** durante il colloquio.
+
+| Stack | Tecnologia |
+|-------|------------|
+| Interfaccia | Delphi 12 VCL (Win64) |
+| Motore AI | .NET 10 subprocess (`SmartInterview.Engine.exe`) |
+| Speech-to-text | Whisper.net |
+| LLM | LLamaSharp / llama.cpp (CUDA12, Vulkan, CPU) |
 
 ---
 
-## Layout
+## Documentazione
+
+| Documento | Contenuto |
+|-----------|-----------|
+| [Architettura](docs/architecture.md) | Diagrammi, flussi, modalità ascolto, GPU backends |
+| [Setup e build](docs/setup.md) | Requisiti, compilazione, prima esecuzione, troubleshooting |
+| [Riferimento unità Pascal](docs/pas-reference.md) | Descrizione di ogni file `.pas` |
+| [Motore C# / IPC](docs/csharp-engine.md) | Subprocesso Engine, protocollo JSON, moduli .cs |
+| [Sistema licenze](docs/licensing.md) | Codec v4, attivazione, LicenseManager |
+| [Unità condivise Common](Common/README.md) | Convenzioni per `.pas` multi-progetto |
+
+---
+
+## Struttura repository
 
 ```
 SmartInterview_Delphi/
-├── SmartInterview.dpr / .dproj   # Delphi entry + project
-├── uMainForm.* / uFrm*.*           # UI forms
-├── src/                            # Delphi units (audio, IPC, settings, licensing)
-├── Engine/                         # C# subprocess + shared engine logic
-│   ├── Program.cs                  # JSON-lines IPC host
+├── Projects.groupproj              # Group project (SmartInterview + LicenseManager)
+├── Projects/
+│   ├── SmartInterview/             # Applicazione principale
+│   │   ├── SmartInterview.dpr/.dproj
+│   │   ├── uMainForm.*             # Overlay colloquio
+│   │   ├── uFrm*.pas               # Form (licenza, splash, settings, …)
+│   │   └── src/                    # Unità Delphi (audio, IPC, settings)
+│   └── LicenseManager/             # Tool generazione licenze
+├── Common/                         # Unità Pascal condivise (es. uLicenseCodec)
+├── Engine/                         # Motore C# + IPC
+│   ├── Program.cs
 │   ├── SmartInterview.Engine.csproj
-│   └── *.cs                        # Whisper, LLM, downloads, GPU probe
-├── Resources/app.ico
-├── README.md
-└── .gitignore
+│   └── *.cs
+├── docs/                           # Documentazione dettagliata
+└── README.md                       # Questo file
 ```
 
-| Layer | Role |
-|-------|------|
-| Delphi UI | WASAPI capture, hotkeys, overlay, tray, read-along |
-| `src/uPipeEngine.pas` | Spawns engine, JSON stdin/stdout IPC |
-| `Engine/Program.cs` | Command dispatcher |
-| `Engine/*.cs` | Models, transcription, LLM, GPU backends |
-
-Models are not in the repo. First run downloads to `<exe>\models` or `%LOCALAPPDATA%\SmartInterview\models`.
-
 ---
 
-## Startup flow
-
-1. **Single-instance mutex** → license → disclaimer → optional interview setup.
-2. **Splash** (`uAppStartup.RunInitialStartup`):
-   - Start `SmartInterview.Engine.exe` from `Win64\*\EngineDeploy\` (created by engine build).
-   - `ping` → `startup` IPC: download/load Whisper + LLM, warm-up, apply profile.
-3. **Main form** reuses the engine from splash.
-
-### Engine license handshake
-
-`SmartInterview.exe` must spawn `SmartInterview.Engine.exe`; the engine refuses AI IPC unless Delphi passes a valid session token.
-
-1. Delphi builds `SI_SESSION.v1.<expiry>.<machineId>.<hmac>` from the stored license + machine fingerprint (`src/uSessionAuth.pas`).
-2. On `TPipeEngine.Start`, Delphi sets child env vars `SMARTINTERVIEW_SESSION` and `SMARTINTERVIEW_LICENSE`.
-3. Engine validates HMAC + machine + expiry (`Engine/EngineSessionAuth.cs`) before handling any command (including `ping`).
-4. `startup` IPC also sends `session_token` for redundancy; it must match the env token.
-
-Debug Engine builds (`DIAGNOSTIC_LOG`) allow running without env vars for local dotnet testing.
-
----
-
-## Runtime
+## Come funziona (in breve)
 
 ```mermaid
 flowchart LR
   UI[Delphi UI] --> Pipe[uPipeEngine]
   Pipe -->|JSON stdin| Eng[Engine.exe]
   Eng -->|JSON stdout| Pipe
-  UI --> Audio[WASAPI 16kHz PCM]
+  UI --> Audio[WASAPI 16kHz]
   Audio --> UI
 ```
 
-### IPC (one JSON line per request/response)
+1. **Avvio** — verifica licenza, disclaimer, splash con download/caricamento modelli.
+2. **Ascolto** — manuale (tieni Ctrl/Shift/Alt) o automatico (VAD su audio di sistema).
+3. **Trascrizione** — PCM inviato all'engine via IPC `transcribe` / `transcribe_stream`.
+4. **Risposta** — LLM locale in streaming (`generate_stream`); in modalità auto, `classify_utterance` filtra le non-domande.
 
-| Command | Purpose |
-|---------|---------|
-| `ping` | Health check |
-| `startup` | Full init (whisper + LLM + profile) |
-| `transcribe` | Float32 PCM → text (`samples_b64`) |
-| `classify_utterance` | Auto mode: is this a question? |
-| `generate_stream` | Stream answer tokens |
-| `reset` / `context_status` | Conversation memory + UI fill % |
-| `set_language` / `set_profile` / `set_answer_length` | Runtime settings |
-
-### Listening modes
-
-**Manual (hold Ctrl/Shift/Alt):** capture while held → live preview every 450 ms (full-buffer transcribe) → on release, final transcribe → always answer (`StreamAnswer` forced).
-
-**Auto:** VAD segments system audio → live preview → on segment end: classify → skip non-questions / duplicates → stream answer (respects `[[SKIP]]`).
-
-Diagnostics: `%LOCALAPPDATA%\SmartInterview\live-transcribe-diag.log`
+L'engine richiede un **token di sessione** valido (derivato dalla licenza) passato via variabili d'ambiente. Dettagli in [Architettura → Autenticazione sessione](docs/architecture.md#autenticazione-sessione-engine).
 
 ---
 
-## Models
+## Modelli AI
 
-| Tier | LLM file | Whisper file |
-|------|----------|--------------|
-| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `ggml-small.bin` |
-| Balanced | `response-balanced.bin` (7B) | `ggml-medium.bin` |
-| Max | `response-max.bin` (14B) | `ggml-large-v3.bin` |
+I modelli **non** sono nel repository. Al primo avvio vengono scaricati in `<exe>\models` o `%LOCALAPPDATA%\SmartInterview\models`.
 
-Catalogs: `Engine/ModelCatalog.cs`, `Engine/WhisperModelCatalog.cs` (mirrored in `src/uModelCat.pas`, `src/uWhisperCat.pas`).
+| Tier | LLM | Whisper |
+|------|-----|---------|
+| Fast | Qwen2.5-3B Q4_K_M | ggml-small |
+| Balanced | Qwen2.5-7B | ggml-medium |
+| Max | Qwen2.5-14B | ggml-large-v3 |
 
-### GPU backends (`Engine/NativeBackendBootstrap.cs`)
+Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazioni utente).
 
-| GPU | LLM order |
-|-----|-----------|
+### Backend GPU
+
+| GPU | Ordine preferenza LLM |
+|-----|----------------------|
 | NVIDIA (non-Blackwell) | CUDA12 → Vulkan → CPU |
 | NVIDIA Blackwell (RTX 50xx) | Vulkan → CPU |
-| Other | Vulkan → CPU |
+| Altro | Vulkan → CPU |
 
 ---
 
-## Build
+## Build rapida
 
-**Requirements:** RAD Studio 12+ (Delphi Win64), .NET SDK 10, Windows x64.
+**Requisiti:** RAD Studio 12+ (Delphi Win64), .NET SDK 10, Windows x64.
 
-Open `SmartInterview.dproj` in RAD Studio and build **Win64**. After each Delphi build, MSBuild automatically runs:
+1. Apri `Projects.groupproj` in RAD Studio.
+2. Compila **SmartInterview** (Win64).
+3. L'engine viene buildato e deployato automaticamente in `Projects/SmartInterview/Win64/<Config>/EngineDeploy/`.
 
-```text
-dotnet build Engine\SmartInterview.Engine.csproj -c Release
-```
-
-That deploys `SmartInterview.Engine.exe` (and GPU runtimes) to `Win64\Debug\EngineDeploy\` and `Win64\Release\EngineDeploy\` next to `SmartInterview.exe`. The app looks for the engine there first.
-
-If startup says "Engine not found", build once manually:
+Build manuale engine:
 
 ```powershell
 dotnet build Engine\SmartInterview.Engine.csproj -c Release
 ```
 
----
-
-## Settings
-
-Stored in registry via `src/uRegistryStore.pas`: language (default `en`), model tiers, answer length, listening key, opacity, profile (role/stack/job/experience), VAD.
+Guida completa: [docs/setup.md](docs/setup.md).
 
 ---
 
-## Maintainer notes
+## Progetti Delphi
 
-- Engine discovery: `<exe>\EngineDeploy\SmartInterview.Engine.exe` first (`uPipeEngine.FindEngineExe`).
-- Conversation history lives in `Engine/LocalLlmClient.cs` RAM; baseline tokens excluded from UI context %.
-- Manual capture always answers; auto uses `classify_utterance` + `[[SKIP]]`.
-- New IPC command: add handler in `Engine/Program.cs`, wrapper in `uPipeEngine.pas`, caller in `uMainForm.pas`.
+| Progetto | Scopo | Output |
+|----------|-------|--------|
+| **SmartInterview** | App colloquio | `Projects/SmartInterview/Win64/Release/SmartInterview.exe` |
+| **LicenseManager** | Tool licenze (interno) | `Projects/LicenseManager/Win64/Release/LicenseManager.exe` |
+
+Entrambi risolvono le unità condivise da `Common/` (search path `..\..\Common\`).
+
+---
+
+## Impostazioni utente
+
+Salvate nel registry (`uRegistryStore.pas`):
+
+- Lingua (default `en`)
+- Tier modelli LLM e Whisper
+- Lunghezza risposta (breve/medio/lungo)
+- Tasto ascolto (Ctrl/Shift/Alt)
+- Opacità overlay
+- Profilo colloquio (ruolo, stack, job, esperienza)
+- Parametri VAD (soglia, silenzio)
+
+---
+
+## Note per manutentori
+
+- **Engine discovery:** `<exe>\EngineDeploy\SmartInterview.Engine.exe` per primo (`uPipeEngine.FindEngineExe`).
+- **Memoria conversazione:** RAM in `LocalLlmClient.cs`; baseline tokens esclusi dalla % contesto UI.
+- **Manuale vs auto:** la cattura manuale risponde sempre; l'auto usa `classify_utterance` + marker `[[SKIP]]`.
+- **Nuovo comando IPC:** handler in `Engine/Program.cs` → wrapper `uPipeEngine.pas` → caller `uMainForm.pas`.
+- **Unità condivise:** mettere in `Common/`, non duplicare tra progetti.
+- **Diagnostica trascrizione:** `%LOCALAPPDATA%\SmartInterview\live-transcribe-diag.log`.
+
+---
+
+## Licenza software
+
+SmartInterview richiede una chiave licenza valida all'avvio. Per generare chiavi usare **LicenseManager** (tool interno). Vedi [docs/licensing.md](docs/licensing.md).

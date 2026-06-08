@@ -597,17 +597,10 @@ end;
 
 procedure TMainForm.InitTrayIcon;
 var
-  IconPath: string;
   SysIcon: HICON;
 begin
   if Application.Icon.Handle <> 0 then
-    trayIcon.Icon.Assign(Application.Icon)
-  else
-  begin
-    IconPath := TPath.Combine(ExtractFilePath(ParamStr(0)), 'Resources\app.ico');
-    if TFile.Exists(IconPath) then
-      trayIcon.Icon.LoadFromFile(IconPath);
-  end;
+    trayIcon.Icon.Assign(Application.Icon);
   if trayIcon.Icon.Handle = 0 then
   begin
     SysIcon := LoadIcon(0, IDI_APPLICATION);

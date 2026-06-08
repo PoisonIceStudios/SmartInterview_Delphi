@@ -36,8 +36,8 @@
 
   <Target Name="DeployEngineToDelphi" AfterTargets="Build">
     <PropertyGroup>
-      <_DelphiDeployDir>$(MSBuildProjectDirectory)\..\Win64\$(Configuration)\EngineDeploy\</_DelphiDeployDir>
-      <_DelphiDebugDeployDir>$(MSBuildProjectDirectory)\..\Win64\Debug\EngineDeploy\</_DelphiDebugDeployDir>
+      <_DelphiDeployDir>$(MSBuildProjectDirectory)\..\Projects\SmartInterview\Win64\$(Configuration)\EngineDeploy\</_DelphiDeployDir>
+      <_DelphiDebugDeployDir>$(MSBuildProjectDirectory)\..\Projects\SmartInterview\Win64\Debug\EngineDeploy\</_DelphiDebugDeployDir>
     </PropertyGroup>
     <MakeDir Directories="$(_DelphiDeployDir)" />
     <ItemGroup>
