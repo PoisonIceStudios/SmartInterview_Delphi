@@ -41,7 +41,6 @@ type
     function FindByUsername(const Username: string): TLicenseEntry;
     procedure RemoveAllByUsername(const Username: string);
     procedure ApplyMonthPreset(Months: Integer);
-    procedure StyleForm;
   public
   end;
 
@@ -57,38 +56,10 @@ uses
   uLicenseCodecV5,
   uLicenseOnlineTime,
   uLicenseEcdsa,
-  uLicenseEcdsaSign,
-  uTheme;
-
-procedure TFrmLicenseManagerMain.StyleForm;
-begin
-  StyleDialogForm(Self, pnlTop, lblTitle);
-  lblHint.Font.Color := ThemeTextDim;
-  lblUsername.Font.Color := ThemeTextDim;
-  lblExpiry.Font.Color := ThemeTextDim;
-  lblPresets.Font.Color := ThemeTextDim;
-  StyleInput(edtUsername);
-  dtpExpiry.Font.Name := ThemeFontFamily;
-  dtpExpiry.Font.Color := ThemeText;
-  dtpExpiry.ParentFont := False;
-  chkLifetime.Font.Color := ThemeText;
-  chkLifetime.ParentFont := False;
-  chkActive.Font.Color := ThemeText;
-  chkActive.ParentFont := False;
-  StyleDialogButton(btnCreate, True);
-  StyleDialogButton(btn1Month, False);
-  StyleDialogButton(btn3Month, False);
-  StyleDialogButton(btn6Month, False);
-  StyleDialogButton(btn12Month, False);
-  lvLicenses.Color := ThemeSurfaceAlt;
-  lvLicenses.Font.Name := ThemeFontFamily;
-  lvLicenses.Font.Color := ThemeText;
-  lvLicenses.ParentFont := False;
-end;
+  uLicenseEcdsaSign;
 
 procedure TFrmLicenseManagerMain.FormCreate(Sender: TObject);
 begin
-  StyleForm;
   FRecords := TObjectList<TLicenseEntry>.Create(True);
   TLicenseRecordStore.LoadInto(FRecords);
   dtpExpiry.Date := IncMonth(Date, 12);
@@ -97,8 +68,9 @@ begin
   chkActive.Checked := True;
   UpdateExpiryControls;
   RefreshList;
-  lblHint.Caption :=
-    'Create SI5 license keys (v5). Internet required. One entry per username — creating again replaces the previous key.';
+  lblHint.Caption := Format(
+    'Max username %d chars. Keys are %d chars (8x4). Internet required to create keys (online UTC). App verifies online too.',
+    [LicenseMaxUsernameLen, LicenseKeyChars]);
   SetStatus(Format('Loaded %d license(s). Data: %s', [FRecords.Count, TLicenseRecordStore.DataFilePath]), True);
 end;
 

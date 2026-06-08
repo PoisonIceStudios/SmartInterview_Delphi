@@ -3,8 +3,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
   Top = 0
   BorderStyle = bsSingle
   Caption = 'SmartInterview License Manager'
-  ClientHeight = 580
-  ClientWidth = 980
+  ClientHeight = 630
+  ClientWidth = 757
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -18,11 +18,12 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
   object pnlTop: TPanel
     Left = 0
     Top = 0
-    Width = 980
+    Width = 757
     Height = 172
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
+    ExplicitWidth = 980
     object lblTitle: TLabel
       Left = 16
       Top = 8
@@ -104,7 +105,7 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
       TabOrder = 3
     end
     object btnCreate: TButton
-      Left = 860
+      Left = 628
       Top = 131
       Width = 120
       Height = 27
@@ -152,8 +153,8 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
   object lvLicenses: TListView
     Left = 0
     Top = 172
-    Width = 980
-    Height = 408
+    Width = 757
+    Height = 458
     Align = alClient
     Columns = <
       item
@@ -182,5 +183,7 @@ object FrmLicenseManagerMain: TFrmLicenseManagerMain
     TabOrder = 1
     ViewStyle = vsReport
     OnSelectItem = lvLicensesSelectItem
+    ExplicitWidth = 980
+    ExplicitHeight = 408
   end
 end
