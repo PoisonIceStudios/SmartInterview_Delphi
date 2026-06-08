@@ -76,8 +76,12 @@ procedure TFrmLicense.StyleForm;
 begin
   StyleDialogForm(Self, pnlTitle, lblTitle);
   lblInfo.Font.Color := ThemeTextDim;
+  lblInfo.ParentFont := False;
   lblForum.Font.Color := ThemeTextDim;
+  lblForum.ParentFont := False;
   lblLicense.Font.Color := ThemeTextDim;
+  lblLicense.ParentFont := False;
+  lblStatus.ParentFont := False;
   StyleInput(edtForum);
   StyleInput(edtLicense);
   StyleDialogButton(btnActivate, True);

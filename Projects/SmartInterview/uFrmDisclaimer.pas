@@ -54,7 +54,7 @@ begin
   Font.Name := ThemeFontFamily;
   Font.Color := ThemeText;
   StyleDialogMemo(memEula);
-  chkAccept.Font.Color := ThemeText;
+  StyleCheckBox(chkAccept);
   StyleDialogButton(btnAccept, True);
   StyleDialogButton(btnDecline, False);
 end;
