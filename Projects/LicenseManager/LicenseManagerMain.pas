@@ -40,6 +40,7 @@ type
     procedure SetStatus(const Msg: string; Ok: Boolean);
     procedure UpdateExpiryControls;
     function FindByUsername(const Username: string): TLicenseEntry;
+    procedure RemoveAllByUsername(const Username: string);
     procedure ApplyMonthPreset(Months: Integer);
   public
   end;
@@ -144,6 +145,20 @@ begin
   end;
 end;
 
+procedure TFrmLicenseManagerMain.RemoveAllByUsername(const Username: string);
+var
+  Norm, EntryNorm: string;
+  I: Integer;
+begin
+  Norm := LicenseNormalizeUsername(Username);
+  for I := FRecords.Count - 1 downto 0 do
+  begin
+    EntryNorm := LicenseNormalizeUsername(FRecords[I].Username);
+    if EntryNorm = Norm then
+      FRecords.Delete(I);
+  end;
+end;
+
 procedure TFrmLicenseManagerMain.RefreshList;
 var
   Entry: TLicenseEntry;
@@ -173,7 +188,8 @@ end;
 procedure TFrmLicenseManagerMain.btnCreateClick(Sender: TObject);
 var
   UserNorm, Key, Err: string;
-  Entry, Existing: TLicenseEntry;
+  Entry: TLicenseEntry;
+  HadExisting: Boolean;
   Utc: TDateTime;
   Payload: TLicensePayload;
   PayloadBytes, Hash, Sig: TBytes;
@@ -199,16 +215,8 @@ begin
     Exit;
   end;
 
-  Existing := FindByUsername(UserNorm);
-  if Existing <> nil then
-  begin
-    if MessageDlg(
-      Format('A license for "%s" already exists.' + sLineBreak + 'Replace it with a new key?',
-        [Existing.Username]),
-      mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
-      Exit;
-    FRecords.Remove(Existing);
-  end;
+  HadExisting := FindByUsername(UserNorm) <> nil;
+  RemoveAllByUsername(UserNorm);
 
   try
     PayloadBytes := LicenseCodecBuildPayloadV5(UserNorm, dtpExpiry.Date, Utc,
@@ -259,7 +267,10 @@ begin
 
   RefreshList;
   edtUsername.Text := '';
-  SetStatus(Format('Created license for "%s" (%s).', [UserNorm, Entry.ExpiryLabel]), True);
+  if HadExisting then
+    SetStatus(Format('Replaced license for "%s" (%s).', [UserNorm, Entry.ExpiryLabel]), True)
+  else
+    SetStatus(Format('Created license for "%s" (%s).', [UserNorm, Entry.ExpiryLabel]), True);
 end;
 
 procedure TFrmLicenseManagerMain.lvLicensesSelectItem(Sender: TObject; Item: TListItem;

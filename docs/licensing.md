@@ -129,7 +129,7 @@ Utility separata per venditori/admin:
 - **Richiede internet** per creare licenze (`TryFetchUtcNow` prima di ogni emissione)
 - Crea licenze con username, scadenza (o lifetime), flag active
 - Preset rapidi: 1/3/6/12 mesi (basati sulla data UTC online, non sull'orologio locale)
-- Salva elenco in `licenses.json` accanto all'exe
+- Salva elenco in `licenses.json` accanto all'exe (un solo record per username: creare di nuovo **sostituisce** la chiave precedente)
 - Decode/visualizza payload chiavi esistenti
 
 - Genera chiavi v5: `dotnet run --project tools/KeyGen` (prima volta o rotazione produzione)

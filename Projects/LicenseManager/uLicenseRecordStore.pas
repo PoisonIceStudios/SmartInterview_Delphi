@@ -38,6 +38,18 @@ begin
   Result := TPath.Combine(ExtractFilePath(ParamStr(0)), 'licenses.json');
 end;
 
+function FindEntryIndexByUsername(List: TObjectList<TLicenseEntry>; const Username: string): Integer;
+var
+  I: Integer;
+  Norm: string;
+begin
+  Result := -1;
+  Norm := LicenseNormalizeUsername(Username);
+  for I := 0 to List.Count - 1 do
+    if LicenseNormalizeUsername(List[I].Username) = Norm then
+      Exit(I);
+end;
+
 class procedure TLicenseRecordStore.LoadInto(List: TObjectList<TLicenseEntry>);
 var
   Path, Text, RegStr, ExpStr: string;
@@ -45,7 +57,7 @@ var
   Arr: TJSONArray;
   Obj: TJSONObject;
   Entry: TLicenseEntry;
-  I: Integer;
+  I, Idx: Integer;
 begin
   List.Clear;
   Path := DataFilePath;
@@ -83,7 +95,14 @@ begin
       if ExpStr <> '' then
         TryISO8601ToDate(ExpStr, Entry.ExpiryDate, False);
       Entry.Active := Obj.GetValue<Boolean>('active', True);
-      List.Add(Entry);
+      Idx := FindEntryIndexByUsername(List, Entry.Username);
+      if Idx >= 0 then
+      begin
+        List[Idx].Free;
+        List[Idx] := Entry;
+      end
+      else
+        List.Add(Entry);
     end;
   finally
     Root.Free;
