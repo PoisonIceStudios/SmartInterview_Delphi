@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{B4E8F1A2-6C3D-4E5F-9A0B-1C2D3E4F5A6B}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="Projects\LicenseManager\LicenseManager.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Projects\SmartInterview\SmartInterview.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="LicenseManager">
+        <MSBuild Projects="Projects\LicenseManager\LicenseManager.dproj"/>
+    </Target>
+    <Target Name="LicenseManager:Clean">
+        <MSBuild Projects="Projects\LicenseManager\LicenseManager.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LicenseManager:Make">
+        <MSBuild Projects="Projects\LicenseManager\LicenseManager.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SmartInterview">
+        <MSBuild Projects="Projects\SmartInterview\SmartInterview.dproj"/>
+    </Target>
+    <Target Name="SmartInterview:Clean">
+        <MSBuild Projects="Projects\SmartInterview\SmartInterview.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SmartInterview:Make">
+        <MSBuild Projects="Projects\SmartInterview\SmartInterview.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="LicenseManager;SmartInterview"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="LicenseManager:Clean;SmartInterview:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="LicenseManager:Make;SmartInterview:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

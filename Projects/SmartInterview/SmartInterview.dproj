@@ -4,7 +4,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">SmartInterview</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
@@ -22,23 +22,6 @@
     <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
         <Base_Win64>true</Base_Win64>
         <CfgParent>Base</CfgParent>
-        <Base>true</Base>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
-        <Cfg_1>true</Cfg_1>
-        <CfgParent>Base</CfgParent>
-        <Base>true</Base>
-    </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win32)'!=''">
-        <Cfg_1_Win32>true</Cfg_1_Win32>
-        <CfgParent>Cfg_1</CfgParent>
-        <Cfg_1>true</Cfg_1>
-        <Base>true</Base>
-    </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
-        <Cfg_1_Win64>true</Cfg_1_Win64>
-        <CfgParent>Cfg_1</CfgParent>
-        <Cfg_1>true</Cfg_1>
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
@@ -92,26 +75,6 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_1)'!=''">
-        <DCC_Define>DEBUG;DIAGNOSTIC_LOG;$(DCC_Define)</DCC_Define>
-        <DCC_DebugDCUs>true</DCC_DebugDCUs>
-        <DCC_Optimize>false</DCC_Optimize>
-        <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
-        <DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
-        <DCC_RemoteDebug>true</DCC_RemoteDebug>
-        <DCC_IntegerOverflowCheck>true</DCC_IntegerOverflowCheck>
-        <DCC_RangeChecking>true</DCC_RangeChecking>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
-        <DCC_RemoteDebug>false</DCC_RemoteDebug>
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
-        <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_Locale>1033</VerInfo_Locale>
-        <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
@@ -143,16 +106,8 @@
         <DCCReference Include="uMainForm.pas">
             <Form>MainForm</Form>
         </DCCReference>
-        <RcItem Include="Resources\app.ico">
-            <ResourceType>ICON</ResourceType>
-            <ResourceId>Icon_MainIcon</ResourceId>
-        </RcItem>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
-        </BuildConfiguration>
-        <BuildConfiguration Include="Debug">
-            <Key>Cfg_1</Key>
-            <CfgParent>Base</CfgParent>
         </BuildConfiguration>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
@@ -173,12 +128,6 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="Resources\app.ico" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win64">
-                        <RemoteDir>Resources\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
                 <DeployFile LocalName="Resources\app.ico" Configuration="Release" Class="ProjectFile">
                     <Platform Name="Win64">
                         <RemoteDir>Resources\</RemoteDir>
@@ -1165,14 +1114,11 @@
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
     <Target Name="CopyResources" AfterTargets="Build" Condition="'$(Platform)'=='Win64'">
-        <MakeDir Directories="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources" />
-        <Copy SourceFiles="$(MSBuildProjectDirectory)\Resources\app.ico"
-              DestinationFolder="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources\"
-              SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\Resources\app.ico')" />
+        <MakeDir Directories="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources"/>
+        <Copy SourceFiles="$(MSBuildProjectDirectory)\Resources\app.ico" DestinationFolder="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources\" SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\Resources\app.ico')"/>
     </Target>
     <Target Name="BuildEngineDeploy" AfterTargets="CopyResources" Condition="'$(Platform)'=='Win64'">
-        <Message Importance="high" Text="Building SmartInterview.Engine and deploying to Win64\$(Configuration)\EngineDeploy\..." />
-        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\Engine\SmartInterview.Engine.csproj&quot; -c Release"
-              IgnoreExitCode="false" />
+        <Message Importance="high" Text="Building SmartInterview.Engine and deploying to Win64\$(Configuration)\EngineDeploy\..."/>
+        <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\Engine\SmartInterview.Engine.csproj&quot; -c Release" IgnoreExitCode="false"/>
     </Target>
 </Project>

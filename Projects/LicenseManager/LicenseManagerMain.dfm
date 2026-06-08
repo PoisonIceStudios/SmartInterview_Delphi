@@ -1,6 +1,7 @@
 object FrmLicenseManagerMain: TFrmLicenseManagerMain
   Left = 0
   Top = 0
+  BorderStyle = bsSingle
   Caption = 'SmartInterview License Manager'
   ClientHeight = 580
   ClientWidth = 980
