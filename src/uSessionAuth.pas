@@ -9,12 +9,13 @@ uses
 const
   SessionEnvVar = 'SMARTINTERVIEW_SESSION';
   LicenseEnvVar = 'SMARTINTERVIEW_LICENSE';
+  UserEnvVar = 'SMARTINTERVIEW_USER';
   SessionTokenPrefix = 'SI_SESSION';
-  SessionTokenVersion = 'v1';
+  SessionTokenVersion = 'v2';
   SessionValiditySeconds = 86400;
 
-function SessionBuildToken(const MachineId, LicenseKey: string): string;
-function SessionBuildChildEnvironment(const SessionToken, LicenseKey: string): PChar;
+function SessionBuildToken(const ForumUsername, LicenseKey: string): string;
+function SessionBuildChildEnvironment(const SessionToken, LicenseKey, ForumUsername: string): PChar;
 
 implementation
 
@@ -22,10 +23,11 @@ uses
   System.DateUtils,
   System.Hash,
   System.NetEncoding,
-  System.Classes;
+  System.Classes,
+  uLicenseCodec;
 
 const
-  SessionHmacSecret = 'SmartInterview|EngineSession|v1|hmac';
+  SessionHmacSecret = 'SmartInterview|EngineSession|v2|hmac';
 
 function Base64UrlEncode(const Data: TBytes): string;
 begin
@@ -40,28 +42,30 @@ begin
   Result := THashSHA2.GetHMACAsBytes(Message, Key, THashSHA2.TSHA2Version.SHA256);
 end;
 
-function SessionBuildToken(const MachineId, LicenseKey: string): string;
+function SessionBuildToken(const ForumUsername, LicenseKey: string): string;
 var
   Expiry: Int64;
-  Payload: string;
+  Payload, UserNorm, UserB64: string;
   Sig: TBytes;
   KeyBytes, MsgBytes: TBytes;
 begin
-  if Trim(MachineId) = '' then
-    raise EArgumentException.Create('Machine id is required for session token.');
+  UserNorm := LicenseNormalizeUsername(ForumUsername);
+  if UserNorm = '' then
+    raise EArgumentException.Create('Forum username is required for session token.');
   if Trim(LicenseKey) = '' then
     raise EArgumentException.Create('License key is required for session token.');
 
   Expiry := DateTimeToUnix(TTimeZone.Local.ToUniversalTime(Now), False) + SessionValiditySeconds;
-  Payload := MachineId + '|' + LicenseKey + '|' + IntToStr(Expiry);
+  Payload := UserNorm + '|' + LicenseKey + '|' + IntToStr(Expiry);
   KeyBytes := TEncoding.UTF8.GetBytes(SessionHmacSecret);
   MsgBytes := TEncoding.UTF8.GetBytes(Payload);
   Sig := HmacSha256(MsgBytes, KeyBytes);
+  UserB64 := Base64UrlEncode(TEncoding.UTF8.GetBytes(UserNorm));
   Result := Format('%s.%s.%d.%s.%s',
-    [SessionTokenPrefix, SessionTokenVersion, Expiry, MachineId, Base64UrlEncode(Sig)]);
+    [SessionTokenPrefix, SessionTokenVersion, Expiry, UserB64, Base64UrlEncode(Sig)]);
 end;
 
-function AppendEnvString(var Block: TBytes; const S: string);
+procedure AppendEnvString(var Block: TBytes; const S: string);
 var
   Utf16: TBytes;
   OldLen: Integer;
@@ -73,13 +77,15 @@ begin
     Move(Utf16[0], Block[OldLen], Length(Utf16));
 end;
 
-function SessionBuildChildEnvironment(const SessionToken, LicenseKey: string): PChar;
+function SessionBuildChildEnvironment(const SessionToken, LicenseKey, ForumUsername: string): PChar;
 var
   Cur, P: PChar;
   Block: TBytes;
   Pair: string;
+  UserNorm: string;
 begin
   SetLength(Block, 0);
+  UserNorm := LicenseNormalizeUsername(ForumUsername);
   Cur := GetEnvironmentStringsW;
   if Cur <> nil then
   try
@@ -88,7 +94,8 @@ begin
     begin
       Pair := string(P);
       if (not Pair.StartsWith(SessionEnvVar + '=', True)) and
-         (not Pair.StartsWith(LicenseEnvVar + '=', True)) then
+         (not Pair.StartsWith(LicenseEnvVar + '=', True)) and
+         (not Pair.StartsWith(UserEnvVar + '=', True)) then
         AppendEnvString(Block, Pair);
       Inc(P, Length(P) + 1);
     end;
@@ -98,6 +105,7 @@ begin
 
   AppendEnvString(Block, SessionEnvVar + '=' + SessionToken);
   AppendEnvString(Block, LicenseEnvVar + '=' + LicenseKey);
+  AppendEnvString(Block, UserEnvVar + '=' + UserNorm);
   AppendEnvString(Block, '');
 
   GetMem(Result, Length(Block));

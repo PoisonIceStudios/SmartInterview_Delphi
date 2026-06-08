@@ -38,7 +38,6 @@ function TryEnsureWritable(const Dir: string): Boolean;
 var
   Probe: string;
 begin
-  Result := False;
   try
     ForceDirectories(Dir);
     Probe := TPath.Combine(Dir, '.writetest');

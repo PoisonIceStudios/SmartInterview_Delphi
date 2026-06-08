@@ -50,9 +50,9 @@ begin
   Result := '';
   for C in Nfd do
   begin
-    if TCharacter.GetUnicodeCategory(C) = TUnicodeCategory.ucNonSpacingMark then
+    if C.GetUnicodeCategory = TUnicodeCategory.ucNonSpacingMark then
       Continue;
-    if TCharacter.IsLetterOrDigit(C) then
+    if C.IsLetterOrDigit then
       Result := Result + LowerCase(C);
   end;
 end;
@@ -66,10 +66,10 @@ begin
   I := 1;
   while I <= Length(Text) do
   begin
-    if TCharacter.IsLetterOrDigit(Text[I]) then
+    if Text[I].IsLetterOrDigit then
     begin
       Start := I;
-      while (I <= Length(Text)) and TCharacter.IsLetterOrDigit(Text[I]) do
+      while (I <= Length(Text)) and Text[I].IsLetterOrDigit do
         Inc(I);
       Norm := NormalizeWord(Copy(Text, Start, I - Start));
       if Length(Norm) >= 2 then
@@ -153,10 +153,10 @@ begin
   I := 1;
   while I <= Length(Text) do
   begin
-    if TCharacter.IsLetterOrDigit(Text[I]) then
+    if Text[I].IsLetterOrDigit then
     begin
       Start := I;
-      while (I <= Length(Text)) and TCharacter.IsLetterOrDigit(Text[I]) do
+      while (I <= Length(Text)) and Text[I].IsLetterOrDigit do
         Inc(I);
       Norm := NormalizeWord(Copy(Text, Start, I - Start));
       if Norm <> '' then

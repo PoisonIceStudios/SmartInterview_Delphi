@@ -164,8 +164,6 @@ begin
     LangCode := 'en';
   LangName := LangNameForCode(LangCode);
 
-  Engine := nil;
-  Bridge := nil;
   Engine := TPipeEngine.Create;
   Bridge := TStartupProgressBridge.Create(OnStatus, Level, WhisperLevel);
   try

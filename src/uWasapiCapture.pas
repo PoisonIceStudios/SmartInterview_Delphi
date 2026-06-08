@@ -394,13 +394,13 @@ var
   Capture: IAudioCaptureClient;
   Format: PWaveFormatEx;
   EventHandle: THandle;
-  BufferSize, PacketLength, Flags, NumFrames: UINT;
+  PacketLength, Flags, NumFrames: UINT;
   Data: PByte;
   ResamplePos: Double;
   LastSample: Single;
   Mono: TArray<Single>;
   OutChunk: TArray<Single>;
-  I, C, FrameStride, Offset: Integer;
+  I, C, Offset: Integer;
   DevPos, QpcPos: UInt64;
 
   procedure SignalReady(Ok: Boolean);
@@ -468,7 +468,6 @@ begin
     SignalReady(True);
     ResamplePos := 0;
     LastSample := 0;
-    FrameStride := (Format.wBitsPerSample div 8) * Format.nChannels;
     while FActive do
     begin
       WaitForSingleObject(EventHandle, 200);

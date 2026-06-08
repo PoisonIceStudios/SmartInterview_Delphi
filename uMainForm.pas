@@ -237,7 +237,6 @@ type
     FSettingsForm: TFrmSettings;
     function StripNoiseTokens(const Text: string): string;
     function CleanTranscriptText(const Text: string): string;
-    function SanitizeSpeechPart(const Text: string): string;
     procedure WaitLiveBusyIdle(TimeoutMs: Cardinal);
     procedure ApplyLivePreview(const Text: string; const DiagTag: string);
     procedure RunListenFinalize(const ASnap: TArray<Single>; const APreview: string; ASession: Integer);
@@ -260,7 +259,6 @@ type
     procedure ShowGpuLoadStatus;
     procedure SetActionsEnabled(Enabled: Boolean);
     procedure UiInvoke(const Proc: TProc);
-    procedure InvokeOnMainAndWait(const Proc: TProc; TimeoutMs: Cardinal = 5000);
     procedure RunAsync(const Proc: TProc);
     procedure OnListeningKeyPressed;
     procedure OnListeningKeyReleased;
@@ -402,36 +400,6 @@ begin
   TTask.Run(Proc);
 end;
 
-procedure TMainForm.InvokeOnMainAndWait(const Proc: TProc; TimeoutMs: Cardinal);
-var
-  Done: TEvent;
-  Work: TProc;
-begin
-  if not Assigned(Proc) then
-    Exit;
-  if TThread.CurrentThread.ThreadID = MainThreadID then
-  begin
-    Proc();
-    Exit;
-  end;
-  Work := Proc;
-  Done := TEvent.Create(nil, True, False, '');
-  try
-    TThread.Queue(nil, procedure
-    begin
-      try
-        Work();
-      finally
-        Done.SetEvent;
-      end;
-    end);
-    if Done.WaitFor(TimeoutMs) <> wrSignaled then
-      LiveTransDiagWrite('InvokeOnMainAndWait timeout');
-  finally
-    Done.Free;
-  end;
-end;
-
 function TMainForm.StripNoiseTokens(const Text: string): string;
 begin
   Result := Trim(TRegEx.Replace(Text, NoiseTokenPattern, ' '));
@@ -449,21 +417,6 @@ begin
   Result := StringReplace(Result, 'Subtitles by', ' ', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, 'Translated by', ' ', [rfReplaceAll, rfIgnoreCase]);
   Result := TRegEx.Replace(Result, '\s+', ' ').Trim;
-end;
-
-function TMainForm.SanitizeSpeechPart(const Text: string): string;
-var
-  I: Integer;
-  C: Char;
-begin
-  Result := '';
-  for I := 1 to Text.Length do
-  begin
-    C := Text[I];
-    if (C >= ' ') or (C = #$0A) or (C = #$0D) then
-      Result := Result + C;
-  end;
-  Result := Trim(Result);
 end;
 
 procedure TMainForm.WaitLiveBusyIdle(TimeoutMs: Cardinal);

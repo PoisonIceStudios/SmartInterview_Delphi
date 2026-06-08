@@ -353,7 +353,7 @@ begin
     Exit(True);
   FSessionToken := LicenseBuildSessionToken;
   LicenseKey := LicenseStoreGet;
-  ChildEnv := SessionBuildChildEnvironment(FSessionToken, LicenseKey);
+  ChildEnv := SessionBuildChildEnvironment(FSessionToken, LicenseKey, LicenseStoreGetForumUsername);
   try
   Exe := FindEngineExe;
   if FileExists(Exe) then

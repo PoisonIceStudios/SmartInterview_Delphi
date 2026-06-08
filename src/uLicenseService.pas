@@ -5,11 +5,10 @@ interface
 uses
   System.SysUtils;
 
-function LicenseMachineCode: string;
 function LicenseIsValid: Boolean;
 function LicenseBuildSessionToken: string;
-function LicenseBuildActivationRequest(const ForumUsername: string): string;
 function LicenseTryActivate(const LicenseKey, ForumUsername: string; out ErrorMsg: string): Boolean;
+function LicenseLastCheckError: string;
 
 procedure LicenseStoreSave(const LicenseKey, ForumUsername: string);
 function LicenseStoreGet: string;
@@ -19,9 +18,8 @@ procedure LicenseStoreClear;
 implementation
 
 uses
-  uMachineFingerprint,
   uLicenseCodec,
-  uActivationRequest,
+  uLicenseOnlineTime,
   uRegistryStore,
   uSessionAuth;
 
@@ -29,20 +27,33 @@ const
   KeyName = 'LicenseKey';
   UserName = 'LicenseForumUser';
 
+var
+  GLastCheckError: string;
+
+function LicenseLastCheckError: string;
+begin
+  Result := GLastCheckError;
+end;
+
 function LicenseStoreGet: string;
 begin
   Result := RegistryGetString(KeyName);
 end;
 
 function LicenseStoreGetForumUsername: string;
+var
+  Raw: string;
 begin
-  Result := RegistryGetString(UserName);
+  Raw := RegistryGetString(UserName);
+  Result := LicenseNormalizeUsername(Raw);
+  if (Result <> '') and (Result <> Raw) then
+    RegistrySetString(UserName, Result);
 end;
 
 procedure LicenseStoreSave(const LicenseKey, ForumUsername: string);
 begin
   RegistrySetString(KeyName, Trim(LicenseKey));
-  RegistrySetString(UserName, LowerCase(Trim(ForumUsername)));
+  RegistrySetString(UserName, LicenseNormalizeUsername(ForumUsername));
 end;
 
 procedure LicenseStoreClear;
@@ -51,65 +62,69 @@ begin
   RegistrySetString(UserName, '');
 end;
 
-function LicenseMachineCode: string;
-begin
-  Result := MachineRequestCode;
-end;
-
 function LicenseIsValid: Boolean;
 var
-  Key, StoredUser: string;
+  Key, StoredUser, Err: string;
+  Utc: TDateTime;
   Payload: TLicensePayload;
-  Err: string;
 begin
+  GLastCheckError := '';
+  Result := False;
   Key := LicenseStoreGet;
   if Trim(Key) = '' then
-    Exit(False);
+    Exit;
+
   StoredUser := LicenseStoreGetForumUsername;
-  Result := LicenseCodecTryValidate(Key, StoredUser, Payload, Err);
+  if not TryFetchUtcNow(Utc, Err) then
+  begin
+    GLastCheckError := Err;
+    Exit;
+  end;
+
+  if not LicenseCodecTryValidate(Key, StoredUser, Utc, Err) then
+  begin
+    GLastCheckError := Err;
+    if LicenseCodecTryDecodePayload(Key, Payload, Err) and
+       LicenseCodecIsExpired(Payload, Utc) then
+      LicenseStoreClear;
+    Exit;
+  end;
+
+  Result := True;
 end;
 
 function LicenseBuildSessionToken: string;
-var
-  Key: string;
 begin
   if not LicenseIsValid then
     raise Exception.Create('License is not valid.');
-  Key := LicenseStoreGet;
-  Result := SessionBuildToken(MachineNormalizedRequestCode, Key);
-end;
-
-function LicenseBuildActivationRequest(const ForumUsername: string): string;
-begin
-  Result := ActivationRequestBuild(ForumUsername);
+  Result := SessionBuildToken(LicenseStoreGetForumUsername, LicenseStoreGet);
 end;
 
 function LicenseTryActivate(const LicenseKey, ForumUsername: string; out ErrorMsg: string): Boolean;
 var
-  Payload: TLicensePayload;
-  User: string;
+  User, Err: string;
+  Utc: TDateTime;
 begin
   ErrorMsg := '';
-  if Trim(ForumUsername) = '' then
+  GLastCheckError := '';
+
+  if not TryFetchUtcNow(Utc, Err) then
   begin
-    ErrorMsg := 'Enter your forum username.';
+    ErrorMsg := Err;
     Exit(False);
   end;
 
-  if not LicenseCodecTryValidate(LicenseKey, ForumUsername, Payload, ErrorMsg) then
+  if not LicenseCodecTryValidate(LicenseKey, ForumUsername, Utc, ErrorMsg) then
   begin
     if ErrorMsg = '' then
       ErrorMsg := 'License key is invalid.';
     Exit(False);
   end;
 
-  if Payload.V >= 2 then
-    User := Payload.U
-  else
-    User := LicenseNormalizeUsername(ForumUsername);
+  User := LicenseNormalizeUsername(ForumUsername);
 
   if not RegistryTrySetString(KeyName, Trim(LicenseKey)) or
-     not RegistryTrySetString(UserName, LowerCase(Trim(User))) then
+     not RegistryTrySetString(UserName, User) then
   begin
     ErrorMsg := 'Could not save the license to the registry.';
     Exit(False);

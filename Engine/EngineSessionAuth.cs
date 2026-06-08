@@ -7,9 +7,10 @@ internal static class EngineSessionAuth
 {
     public const string SessionEnvVar = "SMARTINTERVIEW_SESSION";
     public const string LicenseEnvVar = "SMARTINTERVIEW_LICENSE";
+    public const string UserEnvVar = "SMARTINTERVIEW_USER";
     private const string TokenPrefix = "SI_SESSION";
-    private const string TokenVersion = "v1";
-    private const string HmacSecret = "SmartInterview|EngineSession|v1|hmac";
+    private const string TokenVersion = "v2";
+    private const string HmacSecret = "SmartInterview|EngineSession|v2|hmac";
 
     private static bool _authenticated;
     private static string? _sessionToken;
@@ -25,7 +26,8 @@ internal static class EngineSessionAuth
         error = null;
         var token = Environment.GetEnvironmentVariable(SessionEnvVar);
         var license = Environment.GetEnvironmentVariable(LicenseEnvVar);
-        if (TryValidateToken(token, license, out error))
+        var user = Environment.GetEnvironmentVariable(UserEnvVar);
+        if (TryValidateToken(token, license, user, out error))
         {
             _authenticated = true;
             _sessionToken = token;
@@ -70,7 +72,7 @@ internal static class EngineSessionAuth
         return true;
     }
 
-    public static bool TryValidateToken(string? token, string? licenseKey, out string? error)
+    public static bool TryValidateToken(string? token, string? licenseKey, string? forumUser, out string? error)
     {
         error = null;
         if (string.IsNullOrWhiteSpace(token))
@@ -81,6 +83,11 @@ internal static class EngineSessionAuth
         if (string.IsNullOrWhiteSpace(licenseKey))
         {
             error = "missing license key";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(forumUser))
+        {
+            error = "missing forum username";
             return false;
         }
 
@@ -106,15 +113,41 @@ internal static class EngineSessionAuth
             return false;
         }
 
-        var machineId = parts[3];
-        var localMachine = MachineFingerprint.NormalizedRequestCode();
-        if (!string.Equals(machineId, localMachine, StringComparison.OrdinalIgnoreCase))
+        var userB64 = parts[3];
+        string tokenUser;
+        try
         {
-            error = "session token is not valid for this computer";
+            tokenUser = Encoding.UTF8.GetString(Base64UrlDecode(userB64));
+        }
+        catch
+        {
+            error = "invalid session username";
             return false;
         }
 
-        var payload = $"{machineId}|{licenseKey}|{expiryUnix}";
+        var normalizedUser = LicenseCodec.NormalizeUsername(forumUser);
+        if (!string.Equals(
+                LicenseCodec.NormalizeUsername(tokenUser),
+                normalizedUser,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            error = "session username mismatch";
+            return false;
+        }
+
+        if (!OnlineTime.TryFetchUtcNow(out var utcNow, out var timeErr))
+        {
+            error = timeErr ?? "internet time verification failed";
+            return false;
+        }
+
+        if (!LicenseCodec.TryValidate(licenseKey, normalizedUser, utcNow, out var licenseErr))
+        {
+            error = licenseErr ?? "invalid license key";
+            return false;
+        }
+
+        var payload = $"{normalizedUser}|{licenseKey}|{expiryUnix}";
         var expected = ComputeHmac(payload);
         var provided = Base64UrlDecode(parts[4]);
         if (provided.Length == 0 || !CryptographicOperations.FixedTimeEquals(expected, provided))

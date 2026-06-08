@@ -3,7 +3,7 @@ object FrmLicense: TFrmLicense
   Top = 0
   BorderStyle = bsDialog
   Caption = 'License activation'
-  ClientHeight = 420
+  ClientHeight = 280
   ClientWidth = 540
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -40,77 +40,43 @@ object FrmLicense: TFrmLicense
     Left = 20
     Top = 56
     Width = 500
-    Height = 40
+    Height = 50
     AutoSize = False
     Caption = 
-      'Generate an activation request code and email it to licensing@smartinterview.app to receive ' +
-      'your license key.'
+      'Enter your forum username and the license code you received after purchase.'#13#10'An internet connection is required to verify the license.'
     WordWrap = True
   end
   object lblForum: TLabel
     Left = 20
-    Top = 108
+    Top = 116
     Width = 90
     Height = 15
     Caption = 'Forum username'
   end
   object edtForum: TEdit
     Left = 20
-    Top = 128
+    Top = 136
     Width = 500
     Height = 23
     TabOrder = 1
   end
-  object lblActivation: TLabel
-    Left = 20
-    Top = 160
-    Width = 130
-    Height = 15
-    Caption = 'Activation request code'
-  end
-  object edtActivation: TEdit
-    Left = 20
-    Top = 180
-    Width = 500
-    Height = 23
-    ReadOnly = True
-    TabOrder = 2
-  end
-  object btnGenerate: TButton
-    Left = 20
-    Top = 212
-    Width = 88
-    Height = 28
-    Caption = 'Generate'
-    TabOrder = 3
-    OnClick = btnGenerateClick
-  end
-  object btnCopy: TButton
-    Left = 114
-    Top = 212
-    Width = 118
-    Height = 28
-    Caption = 'Copy for email'
-    TabOrder = 4
-    OnClick = btnCopyClick
-  end
   object lblLicense: TLabel
     Left = 20
-    Top = 252
-    Width = 65
+    Top = 168
+    Width = 70
     Height = 15
-    Caption = 'License key'
+    Caption = 'License code'
   end
   object edtLicense: TEdit
     Left = 20
-    Top = 272
+    Top = 188
     Width = 500
     Height = 23
-    TabOrder = 5
+    TabOrder = 2
   end
   object lblStatus: TLabel
     Left = 20
-    Top = 304
+    Top = 220
     Width = 500
     Height = 15
     AutoSize = False
@@ -118,20 +84,20 @@ object FrmLicense: TFrmLicense
   end
   object btnExit: TButton
     Left = 344
-    Top = 336
+    Top = 236
     Width = 76
     Height = 28
     Caption = 'Exit'
-    TabOrder = 6
+    TabOrder = 3
     OnClick = btnExitClick
   end
   object btnActivate: TButton
     Left = 424
-    Top = 336
+    Top = 236
     Width = 96
     Height = 28
     Caption = 'Activate'
-    TabOrder = 7
+    TabOrder = 4
     OnClick = btnActivateClick
   end
 end

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{B4E8F1A2-6C3D-4E5F-9A0B-1C2D3E4F5A6B}</ProjectGuid>
+        <ProjectVersion>20.1</ProjectVersion>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="SmartInterview.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="LicenseManager\LicenseManager.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="Build">
+        <MSBuild Projects="SmartInterview.dproj"/>
+        <MSBuild Projects="LicenseManager\LicenseManager.dproj"/>
+    </Target>
+    <Target Name="Clean">
+        <MSBuild Projects="SmartInterview.dproj" Targets="Clean"/>
+        <MSBuild Projects="LicenseManager\LicenseManager.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Make">
+        <MSBuild Projects="SmartInterview.dproj" Targets="Make"/>
+        <MSBuild Projects="LicenseManager\LicenseManager.dproj" Targets="Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

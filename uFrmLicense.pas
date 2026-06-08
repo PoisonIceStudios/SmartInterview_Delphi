@@ -4,8 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.UITypes,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.Clipbrd;
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls;
 
 type
   TFrmLicense = class(TForm)
@@ -14,18 +13,12 @@ type
     lblInfo: TLabel;
     lblForum: TLabel;
     edtForum: TEdit;
-    lblActivation: TLabel;
-    edtActivation: TEdit;
-    btnGenerate: TButton;
-    btnCopy: TButton;
     lblLicense: TLabel;
     edtLicense: TEdit;
     lblStatus: TLabel;
     btnExit: TButton;
     btnActivate: TButton;
     procedure FormCreate(Sender: TObject);
-    procedure btnGenerateClick(Sender: TObject);
-    procedure btnCopyClick(Sender: TObject);
     procedure btnActivateClick(Sender: TObject);
     procedure btnExitClick(Sender: TObject);
   private
@@ -41,9 +34,6 @@ implementation
 
 uses
   uTheme, uLicenseService;
-
-const
-  SupportEmail = 'licensing@smartinterview.app';
 
 class function TFrmLicense.EnsureLicensed: Boolean;
 var
@@ -72,21 +62,22 @@ begin
   StyleDialogForm(Self, pnlTitle, lblTitle);
   lblInfo.Font.Color := ThemeTextDim;
   lblForum.Font.Color := ThemeTextDim;
-  lblActivation.Font.Color := ThemeTextDim;
   lblLicense.Font.Color := ThemeTextDim;
   StyleInput(edtForum);
-  StyleInput(edtActivation);
   StyleInput(edtLicense);
   StyleDialogButton(btnActivate, True);
-  StyleDialogButton(btnGenerate, False);
-  StyleDialogButton(btnCopy, False);
   StyleDialogButton(btnExit, False);
 end;
 
 procedure TFrmLicense.FormCreate(Sender: TObject);
+var
+  LastErr: string;
 begin
   edtForum.Text := LicenseStoreGetForumUsername;
   StyleForm;
+  LastErr := LicenseLastCheckError;
+  if LastErr <> '' then
+    SetStatus(LastErr, False);
 end;
 
 procedure TFrmLicense.SetStatus(const Msg: string; Ok: Boolean);
@@ -96,42 +87,6 @@ begin
     lblStatus.Font.Color := ThemeOk
   else
     lblStatus.Font.Color := ThemeWarn;
-end;
-
-procedure TFrmLicense.btnGenerateClick(Sender: TObject);
-begin
-  if Trim(edtForum.Text).IsEmpty then
-  begin
-    SetStatus('Enter your forum username first.', False);
-    edtForum.SetFocus;
-    Exit;
-  end;
-  try
-    edtActivation.Text := LicenseBuildActivationRequest(edtForum.Text);
-    edtActivation.Font.Color := clWindowText;
-    SetStatus('Activation code generated. Copy it and send by email.', True);
-  except
-    edtActivation.Text := '';
-    SetStatus('Could not generate activation code.', False);
-  end;
-end;
-
-procedure TFrmLicense.btnCopyClick(Sender: TObject);
-var
-  Block: string;
-begin
-  if Trim(edtActivation.Text).IsEmpty then
-  begin
-    SetStatus('Generate the activation code first.', False);
-    Exit;
-  end;
-  Block :=
-    'SmartInterview license request' + sLineBreak + sLineBreak +
-    'Forum username: ' + Trim(edtForum.Text) + sLineBreak +
-    'Activation request code: ' + edtActivation.Text + sLineBreak + sLineBreak +
-    'Send to: ' + SupportEmail;
-  Clipboard.AsText := Block;
-  SetStatus('Copied. Paste into your email to ' + SupportEmail, True);
 end;
 
 procedure TFrmLicense.btnActivateClick(Sender: TObject);
