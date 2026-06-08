@@ -1,6 +1,8 @@
 # Audit sicurezza — licenze e runtime
 
-Audit del sistema di licenze (SmartInterview + LicenseManager + Engine DLL), aggiornato dopo revisione del codice sorgente.
+Audit del sistema di licenze (SmartInterview + LicenseManager + Engine DLL).
+
+> **Spiegazione semplice (non tecnica):** vedi [Sicurezza — guida elementare](sicurezza-guida.md).
 
 ## Riepilogo esecutivo
 
@@ -59,7 +61,24 @@ SmartInterview.dpr
 
 ---
 
-## 3. Schema crittografico attuale (codec v4)
+## 3. Schema crittografico v5 (corrente — ECDSA P-256)
+
+Implementato in `Common/uLicenseCodecV5.pas`, `uLicenseEcdsa.pas`, `Engine/LicenseCodecV5.cs`.
+
+| Elemento | Dettaglio |
+|----------|-----------|
+| Prefisso | `SI5-` + 34 gruppi Base32 (136 caratteri dati) |
+| Payload | 21 byte: magic `$55`, flags, expiry day UTC, issued day UTC, username |
+| Firma | 64 byte ECDSA P-256 su SHA-256(payload) |
+| Chiave privata | Solo `Projects/LicenseManager/Keys/license_signing.priv` (gitignored) |
+| Chiave pubblica | `uLicensePublicKey.pas` + `LicenseCodecV5.cs` |
+| Generazione coppia | `dotnet run --project tools/KeyGen` |
+
+**Sicurezza:** senza la chiave privata non si possono creare chiavi valide. La chiave pubblica nel client permette solo verifica.
+
+---
+
+## 3b. Schema legacy v4 (ancora accettato)
 
 ### Formato chiave (32 caratteri Base32, 8×4)
 
@@ -96,20 +115,20 @@ Payload interno (20 byte), poi XOR, poi Base32:
 | Base32 | Leggibilità umana | Nessuna protezione aggiuntiva |
 | Ora online | Impedisce bypass data sistema | Richiede rete; MITM su HTTP(S) time API (basso rischio) |
 
-**Conclusione:** il codec v4 è un **formato firmato simmetricamente**, non crittografia forte. Un attaccante che decompila Delphi o la DLL C# può estrarre i segreti e **forgiare chiavi valide** per qualsiasi username/scadenza.
+**Conclusione v4:** formato simmetrico — segreti estraibili dal binario; usare solo per chiavi legacy. **Nuove emissioni: v5.**
 
-### Raccomandazione per v5 (non implementato)
+---
 
-Per rendere la forgery impraticabile senza il tool venditore:
+## 3c. Controllo periodico runtime (`uLicenseMonitor.pas`)
 
-1. **Firma asimmetrica (Ed25519 o RSA-PSS)**  
-   - LicenseManager: chiave **privata** (solo sul PC del venditore, mai nel client).  
-   - SmartInterview + Engine: chiave **pubblica** embedded (la pubblica non permette di firmare).  
-   - Payload: `version | username | expiry_day | flags | issued_day` + firma.
+| Parametro | Valore | File |
+|-----------|--------|------|
+| Timer UI | 30 min | `uMainForm.tmrLicenseTimer` |
+| Soglia re-check | 6 ore | `LicenseRecheckIntervalMs` |
+| Grace offline | 72 ore | `LicenseOfflineGraceMs` |
+| Ancoraggio UTC | Registry + HMAC | `LicenseAnchorUtc`, `LicenseAnchorHmac` |
 
-2. **Opzionale:** cifratura AES-GCM del payload con chiave derivata dalla firma o chiave pubblica (offusca username/scadenza, ma la verifica asimmetrica è il vero gate).
-
-3. **Rotazione:** prefisso versione nella chiave (`SI5-...`) per convivenza con v4 durante migrazione.
+Flusso: ultimo UTC online noto + tempo monotonic (`GetTickCount64`) → stima scadenza offline; oltre 72h senza refresh online → `FEngine.Stop`.
 
 ---
 
@@ -147,7 +166,8 @@ Per rendere la forgery impraticabile senza il tool venditore:
 | 1b | Verifica licenza richiede ora online | **Già presente** (app + engine) |
 | 2 | Riavvio con licenza scaduta → attivazione iniziale | **Funziona** (`LicenseStoreClear` + `EnsureLicensed`) |
 | 2b | Nuova chiave necessaria dopo scadenza | **Per design** (expiry nel payload) |
-| 3 | Valutazione encryption stringa licenza | **v4 = HMAC + XOR**, non AES; vedi raccomandazione v5 |
+| 3 | Crittografia stringa licenza | **v5 = ECDSA P-256** (corrente); v4 legacy HMAC+XOR |
+| 4 | App aperta a lungo | **Implementato** — re-check 6h, grace offline 72h |
 
 ---
 
@@ -163,9 +183,12 @@ Per rendere la forgery impraticabile senza il tool venditore:
 
 ## Riferimenti codice
 
-- Codec: `Common/uLicenseCodec.pas`, `Engine/LicenseCodec.cs`
+- Codec v4/v5: `Common/uLicenseCodec.pas`, `Common/uLicenseCodecV5.pas`, `Engine/LicenseCodec.cs`, `Engine/LicenseCodecV5.cs`
+- Firma/verifica: `Common/uLicenseEcdsa.pas`, `Projects/LicenseManager/uLicenseEcdsaSign.pas`
+- Monitor periodico: `Common/uLicenseMonitor.pas`
 - Ora online: `Common/uLicenseOnlineTime.pas`, `Engine/OnlineTime.cs`
 - Servizio licenza: `Projects/SmartInterview/src/uLicenseService.pas`
-- UI attivazione: `Projects/SmartInterview/uFrmLicense.pas`
+- UI attivazione: `Projects/SmartInterview/uFrmLicense.pas` (`EnsureLicensed`, `PromptRelicense`)
 - Emissione: `Projects/LicenseManager/LicenseManagerMain.pas`
 - Auth engine: `Engine/EngineSessionAuth.cs`, `Projects/SmartInterview/src/uSessionAuth.pas`
+- KeyGen: `tools/KeyGen/Program.cs`

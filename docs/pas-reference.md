@@ -10,8 +10,13 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 
 | Unità | Descrizione |
 |-------|-------------|
-| `uLicenseCodec.pas` | Codec chiavi licenza v4: encode/decode Base32, payload 20 byte, HMAC-SHA256, XOR keystream. Espone `LicenseCodecEncode`, `LicenseCodecTryValidate`, `LicenseCodecTryDecodePayload`, costanti `LicenseKeyChars`, `LicenseMaxUsernameLen`. |
-| `uLicenseOnlineTime.pas` | `TryFetchUtcNow`: ora UTC da API HTTPS (worldtimeapi, timeapi.io). Usata da SmartInterview e LicenseManager. |
+| `uLicenseCodec.pas` | Router codec v4/v5: `LicenseCodecTryValidate`, `LicenseCodecTryDecodePayload`, Base32 helpers. |
+| `uLicenseCodecV5.pas` | Chiavi `SI5-…`: build payload, format signed key, verify ECDSA. |
+| `uLicenseEcdsa.pas` | `LicenseEcdsaHash`, `LicenseEcdsaVerify` (SHA-256 + ECDSA P-256). |
+| `uLicensePublicKey.pas` | Chiave pubblica embedded per verifica v5. |
+| `uLicenseOnlineTime.pas` | `TryFetchUtcNow`: ora UTC da API HTTPS. |
+| `uLicenseMonitor.pas` | `LicenseMonitorPeriodicCheck`: re-check 6h, grace offline 72h, anchor registry. |
+| `uBCryptApi.pas` | API `bcrypt.dll` per ECDSA sign/verify. |
 
 ---
 
@@ -91,7 +96,8 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 | Unità | Descrizione |
 |-------|-------------|
 | `LicenseManager.dpr` | Entry point tool gestione licenze. |
-| `LicenseManagerMain.pas` | UI principale: crea licenze, preset 1/3/6/12 mesi, lifetime, lista `licenses.json`, decode chiavi. |
+| `LicenseManagerMain.pas` | UI principale: crea licenze v5 `SI5-…`, preset 1/3/6/12 mesi, lifetime, lista `licenses.json`. |
+| `uLicenseEcdsaSign.pas` | Firma ECDSA P-256 con chiave privata da `Keys/license_signing.priv`. |
 | `uLicenseRecordStore.pas` | Persistenza record licenza in `licenses.json` accanto all'exe (username, chiave, scadenza, flag active/lifetime). |
 
 ---

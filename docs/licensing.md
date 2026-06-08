@@ -1,6 +1,6 @@
 # Sistema licenze
 
-[← Torna al README](../README.md) · [Architettura](architecture.md)
+[← Torna al README](../README.md) · [Guida sicurezza semplice](sicurezza-guida.md) · [Architettura](architecture.md)
 
 ## Panoramica
 
@@ -12,12 +12,16 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 
 | Componente | Percorso | Ruolo |
 |------------|----------|-------|
-| Codec licenza | `Common/uLicenseCodec.pas` | Encode/decode chiavi 32 caratteri Base32 (8 gruppi × 4) |
-| Servizio app | `uLicenseService.pas` | Validazione, attivazione, storage registry, build token sessione |
-| Ora online | `Common/uLicenseOnlineTime.pas` | Fetch UTC da worldtimeapi.org / timeapi.io (app + LicenseManager) |
-| Sessione motore | `uSessionAuth.pas` | Token HMAC v2 + variabili d'ambiente processo figlio |
-| Auth motore C# | `Engine/EngineSessionAuth.cs` | Validazione simmetrica lato DLL |
-| Codec motore C# | `Engine/LicenseCodec.cs` | Mirror validazione licenza nel processo .NET |
+| Codec v4/v5 | `Common/uLicenseCodec.pas` | Router decode/validate; v4 legacy |
+| Codec v5 | `Common/uLicenseCodecV5.pas` | Payload SI5, verifica firma ECDSA |
+| Firma ECDSA | `Common/uLicenseEcdsa.pas` | Verifica firma (chiave pubblica embedded) |
+| Firma emissione | `LicenseManager/uLicenseEcdsaSign.pas` | Firma con chiave privata (solo LicenseManager) |
+| Monitor periodico | `Common/uLicenseMonitor.pas` | Re-check 6h, grace offline 72h |
+| Servizio app | `uLicenseService.pas` | Validazione, attivazione, anchor registry, token sessione |
+| Ora online | `Common/uLicenseOnlineTime.pas` | Fetch UTC da worldtimeapi.org / timeapi.io |
+| Sessione motore | `uSessionAuth.pas` | Token HMAC v2 + env vars processo figlio |
+| Auth motore C# | `Engine/EngineSessionAuth.cs` | Gate licenza lato DLL |
+| Codec motore C# | `Engine/LicenseCodec.cs`, `LicenseCodecV5.cs` | Validazione v4/v5 nel processo .NET |
 | Fingerprint | `uMachineFingerprint.pas` | Codice richiesta attivazione (non usato nel token sessione) |
 | Richiesta attivazione | `uActivationRequest.pas` | Codice `RQ1` per supporto venditori |
 | Tool admin | `LicenseManager.exe` | Generazione e gestione licenze |
@@ -48,11 +52,10 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 
 1. Utente inserisce username forum + chiave in `uFrmLicense`.
 2. `LicenseTryActivate` verifica:
-   - Connessione internet (per ora UTC via `TryFetchUtcNow`)
-   - Decode payload (`LicenseCodecTryDecodePayload`)
-   - Username corrispondente
-   - Flag active, non scaduta
-   - Round-trip encode (integrità)
+   - Connessione internet (ora UTC via `TryFetchUtcNow`)
+   - Decode payload v5 o v4 (`LicenseCodecTryDecodePayload`)
+   - Firma ECDSA valida (v5) o HMAC (v4)
+   - Username corrispondente, flag active, non scaduta
 3. Chiave salvata in registry `HKCU\Software\SmartInterview`:
    - `LicenseKey` — chiave licenza
    - `LicenseForumUser` — username normalizzato
@@ -90,7 +93,7 @@ Il token lega **username forum + chiave licenza**, non il fingerprint macchina.
 2. Scadenza token
 3. Username nel token = `SMARTINTERVIEW_USER`
 4. Ora UTC online (`OnlineTime.TryFetchUtcNow`)
-5. Licenza v4 valida (`LicenseCodec.TryValidate`)
+5. Licenza v5/v4 valida (`LicenseCodec.TryValidate`)
 6. Firma HMAC (confronto timing-safe)
 
 ## Fingerprint macchina (attivazione)
@@ -105,7 +108,7 @@ Al riavvio, `LicenseIsValid` usa l'ora UTC online. Se la chiave è **scaduta** o
 
 1. `LicenseStoreClear` rimuove chiave e username dal registry
 2. `TFrmLicense.EnsureLicensed` mostra di nuovo il form di attivazione
-3. Serve una **nuova chiave** dal venditore (la scadenza è incorporata nel payload v4)
+3. Serve una **nuova chiave** dal venditore (la scadenza è nel payload della chiave)
 
 Senza connessione internet la validazione fallisce (messaggio offline) — non è possibile aggirare la scadenza modificando l'orologio di sistema.
 
@@ -129,7 +132,9 @@ Utility separata per venditori/admin:
 - Salva elenco in `licenses.json` accanto all'exe
 - Decode/visualizza payload chiavi esistenti
 
-Vedi anche [Audit sicurezza](security-audit.md) per valutazione crittografica e raccomandazioni v5.
+- Genera chiavi v5: `dotnet run --project tools/KeyGen` (prima volta o rotazione produzione)
+
+Vedi [Guida sicurezza semplice](sicurezza-guida.md) e [Audit sicurezza](security-audit.md).
 
 ### Build
 
@@ -146,6 +151,8 @@ Chiavi principali in `HKCU\Software\SmartInterview`:
 |--------|-------|-------------|
 | `LicenseKey` | `uLicenseService` | Chiave licenza attiva |
 | `LicenseForumUser` | `uLicenseService` | Username forum |
+| `LicenseAnchorUtc` | `uLicenseMonitor` | Ultimo UTC online verificato (HMAC-protected) |
+| `LicenseAnchorHmac` | `uLicenseMonitor` | Integrità ancoraggio anti-manomissione registry |
 | `EulaToken` | `uRegistryStore` | Hash accettazione disclaimer (v3) |
 
 ## Aggiungere unità condivise future

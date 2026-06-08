@@ -101,8 +101,13 @@ La cartella `Common/` contiene unità `.pas` usate da **più progetti** Delphi n
 
 | Unità | Descrizione |
 |-------|-------------|
-| `uLicenseCodec.pas` | Codifica/decodifica chiavi licenza v4 (Base32, HMAC, XOR). Usata da SmartInterview e LicenseManager. |
-| `uLicenseOnlineTime.pas` | Fetch ora UTC online (worldtimeapi.org, timeapi.io). Obbligatoria per creazione e verifica licenze. |
+| `uLicenseCodec.pas` | Router codec licenza v4 (legacy) e v5 |
+| `uLicenseCodecV5.pas` | Payload e validazione chiavi `SI5-…` (ECDSA P-256) |
+| `uLicenseEcdsa.pas` | Verifica firma ECDSA (chiave pubblica embedded) |
+| `uLicensePublicKey.pas` | Blob chiave pubblica BCRYPT per v5 |
+| `uLicenseOnlineTime.pas` | Fetch ora UTC online (obbligatoria per attivazione e emissione) |
+| `uLicenseMonitor.pas` | Re-check periodico licenza (6h / grace offline 72h) |
+| `uBCryptApi.pas` | Binding Windows CNG (`bcrypt.dll`) per ECDSA |
 
 ### Search path (.dproj)
 
