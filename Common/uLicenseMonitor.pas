@@ -51,6 +51,16 @@ begin
   Result := GetTickCount64;
 end;
 
+function BytesToHex(const Data: TBytes): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(Data) do
+    Result := Result + IntToHex(Data[I], 2);
+  Result := LowerCase(Result);
+end;
+
 function AnchorHmac(const Utc: TDateTime; const User, Key: string): string;
 var
   Payload, Secret, Digest: TBytes;
@@ -60,7 +70,7 @@ begin
   Payload := TEncoding.UTF8.GetBytes(Canon);
   Secret := TEncoding.UTF8.GetBytes(AnchorSecret);
   Digest := THashSHA2.GetHMACAsBytes(Payload, Secret, THashSHA2.TSHA2Version.SHA256);
-  Result := THashSHA2.GetHashString(Digest);
+  Result := BytesToHex(Digest);
 end;
 
 procedure LicenseMonitorPersistAnchor(const Utc: TDateTime; const User, Key: string);
