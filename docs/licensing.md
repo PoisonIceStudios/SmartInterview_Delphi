@@ -66,4 +66,4 @@ Search path: ..\..\Common\
 
 ## Aggiungere unità condivise future
 
-Mettere nuove unità in `Common/` e aggiornare `DCC_UnitSearchPath` in tutti i `.dproj` che le usano. Vedi [Common/README.md](../Common/README.md).
+Mettere nuove unità in `Common/` e aggiornare `DCC_UnitSearchPath` in tutti i `.dproj` che le usano. Vedi [Setup → Common](setup.md#common--unità-pascal-condivise).

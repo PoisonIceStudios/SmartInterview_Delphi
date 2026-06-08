@@ -65,15 +65,37 @@ dotnet build Engine\SmartInterview.Engine.csproj -c Release
 
 Il progetto risolve `uLicenseCodec` dalla cartella `Common/` (search path `..\..\Common\`).
 
-## Search path unità condivise
+## Common — unità Pascal condivise
 
-Per aggiungere un nuovo progetto Delphi che usa `Common/`:
+La cartella `Common/` contiene unità `.pas` usate da **più progetti** Delphi nel repository.
+
+### Convenzione
+
+- Ogni nuovo progetto Delphi deve aggiungere `..\..\Common\` a `DCC_UnitSearchPath` nel file `.dproj`.
+- Non duplicare le unità condivise nei singoli progetti: mettile in `Common/`.
+- Le unità specifiche di un singolo progetto restano in `Projects/<NomeProgetto>/src/`.
+
+### Unità attuali
+
+| Unità | Descrizione |
+|-------|-------------|
+| `uLicenseCodec.pas` | Codifica/decodifica chiavi licenza v4 (Base32, HMAC, XOR). Usata da SmartInterview e LicenseManager. |
+
+### Search path (.dproj)
+
+Per un progetto con cartella `src/` locale (es. SmartInterview):
+
+```xml
+<DCC_UnitSearchPath>..\..\Common\;src\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+```
+
+Per LicenseManager (senza cartella `src` locale):
 
 ```xml
 <DCC_UnitSearchPath>..\..\Common\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
 ```
 
-Vedi [Common/README.md](../Common/README.md).
+Per aggiungere un nuovo progetto Delphi che usa `Common/`, includere almeno `..\..\Common\` nel search path come negli esempi sopra.
 
 ## Prima esecuzione
 
