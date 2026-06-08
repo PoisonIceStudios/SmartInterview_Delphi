@@ -5,6 +5,9 @@ unit uLicensePublicKey;
 
 interface
 
+uses
+  System.SysUtils;
+
 function LicensePublicKeyBlob: TBytes;
 
 implementation
