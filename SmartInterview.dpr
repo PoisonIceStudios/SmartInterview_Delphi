@@ -1,7 +1,5 @@
 program SmartInterview;
 
-{$R *.dres}
-
 uses
   Vcl.Forms,
   Vcl.Dialogs,

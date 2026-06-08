@@ -143,6 +143,10 @@
         <DCCReference Include="uMainForm.pas">
             <Form>MainForm</Form>
         </DCCReference>
+        <RcItem Include="Resources\app.ico">
+            <ResourceType>ICON</ResourceType>
+            <ResourceId>Icon_MainIcon</ResourceId>
+        </RcItem>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -169,6 +173,18 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
+                <DeployFile LocalName="Resources\app.ico" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win64">
+                        <RemoteDir>Resources\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Resources\app.ico" Configuration="Release" Class="ProjectFile">
+                    <Platform Name="Win64">
+                        <RemoteDir>Resources\</RemoteDir>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="Win32\Debug\SmartInterview.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>SmartInterview.exe</RemoteName>
@@ -1148,7 +1164,13 @@
     <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
-    <Target Name="BuildEngineDeploy" AfterTargets="Build" Condition="'$(Platform)'=='Win64'">
+    <Target Name="CopyResources" AfterTargets="Build" Condition="'$(Platform)'=='Win64'">
+        <MakeDir Directories="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources" />
+        <Copy SourceFiles="$(MSBuildProjectDirectory)\Resources\app.ico"
+              DestinationFolder="$(MSBuildProjectDirectory)\Win64\$(Configuration)\Resources\"
+              SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\Resources\app.ico')" />
+    </Target>
+    <Target Name="BuildEngineDeploy" AfterTargets="CopyResources" Condition="'$(Platform)'=='Win64'">
         <Message Importance="high" Text="Building SmartInterview.Engine and deploying to Win64\$(Configuration)\EngineDeploy\..." />
         <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\Engine\SmartInterview.Engine.csproj&quot; -c Release"
               IgnoreExitCode="false" />

@@ -17,7 +17,7 @@ SmartInterview_Delphi/
 │   ├── Program.cs                  # JSON-lines IPC host
 │   ├── SmartInterview.Engine.csproj
 │   └── *.cs                        # Whisper, LLM, downloads, GPU probe
-├── app.ico / SmartInterviewResource.rc
+├── Resources/app.ico
 ├── README.md
 └── .gitignore
 ```
