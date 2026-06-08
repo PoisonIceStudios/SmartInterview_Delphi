@@ -10,7 +10,7 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 
 | Unità | Descrizione |
 |-------|-------------|
-| `uLicenseCodec.pas` | Codec chiavi licenza v4: encode/decode Base32, payload 20 byte, HMAC-SHA256, XOR keystream. Espone `LicenseCodecEncode`, `LicenseCodecTryValidate`, costanti `LicenseKeyChars`, `LicenseMaxUsernameLen`. |
+| `uLicenseCodec.pas` | Codec chiavi licenza v4: encode/decode Base32, payload 20 byte, HMAC-SHA256, XOR keystream. Espone `LicenseCodecEncode`, `LicenseCodecTryValidate`, `LicenseCodecTryDecodePayload`, costanti `LicenseKeyChars`, `LicenseMaxUsernameLen`. |
 
 ---
 
@@ -22,7 +22,7 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 | `uMainForm.pas` | Form principale: overlay colloquio, waveform, chat Q&A, tray icon, hotkey ascolto, modalità manuale/auto, read-along, indicatori GPU/contesto. |
 | `uFrmSplash.pas` | Splash screen con stato avvio; delega a `uAppStartup.RunInitialStartup`. |
 | `uFrmLicense.pas` | Dialog attivazione licenza (`EnsureLicensed`). |
-| `uFrmDisclaimer.pas` | Dialog accettazione disclaimer (`EnsureAccepted`). |
+| `uFrmDisclaimer.pas` | Dialog accettazione disclaimer (`EnsureAccepted`, EULA v3). |
 | `uFrmInterviewSetup.pas` | Prompt opzionale configurazione profilo colloquio al primo avvio. |
 | `uFrmProfile.pas` | Editor profilo: ruolo, tech stack, job description, esperienza. |
 | `uFrmSettings.pas` | Impostazioni: modalità auto, VAD threshold/silenzio, meter audio, tasto ascolto. |
@@ -32,15 +32,15 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 
 ## Projects/SmartInterview/src/ — logica applicativa
 
-### Avvio e motore IPC
+### Avvio e bridge motore
 
 | Unità | Descrizione |
 |-------|-------------|
-| `uAppStartup.pas` | Orchestrazione startup: avvia engine, IPC `startup`, mantiene singleton `TPipeEngine` condiviso col main form. |
-| `uPipeEngine.pas` | Bridge Delphi ↔ Engine: spawn processo, pipe stdin/stdout, protocollo JSON-lines, comandi ping/startup/transcribe/generate_stream/reset/classify ecc. |
-| `uAppSettings.pas` | Getter/setter impostazioni runtime: tier intelligenza LLM/Whisper, lunghezza risposta, lingua, VRAM dedicata da registry. |
+| `uAppStartup.pas` | Orchestrazione startup: `TPipeEngine.Start`, IPC `ping` + `startup` (con fallback `StartupLegacy`), singleton condiviso col main form via `TakeStartupEngine`. |
+| `uPipeEngine.pas` | Bridge Delphi ↔ `SmartInterview.Engine.dll`: `CreateProcess` con `dotnet`, pipe stdin/stdout, protocollo JSON-lines, comandi ping/startup/transcribe/generate_stream/reset/classify ecc. Costruisce token sessione e env vars licenza all'avvio. |
+| `uAppSettings.pas` | Getter/setter impostazioni runtime: tier intelligenza LLM/Whisper, lunghezza risposta, lingua, VRAM dedicata da registry, parametri VAD. |
 | `uAppPaths.pas` | Percorsi modelli: directory exe, `%LOCALAPPDATA%\SmartInterview\models`, elenco file noti. |
-| `uRegistryStore.pas` | Persistenza impostazioni e licenza nel registry Windows. |
+| `uRegistryStore.pas` | Persistenza impostazioni e licenza in `HKCU\Software\SmartInterview`. |
 | `uDebugLog.pas` | Log diagnostico su file in `%LOCALAPPDATA%\SmartInterview\`. |
 
 ### Audio e cattura
@@ -77,10 +77,10 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 
 | Unità | Descrizione |
 |-------|-------------|
-| `uLicenseService.pas` | API licenza applicazione: `LicenseIsValid`, `LicenseTryActivate`, storage registry, build session token. |
-| `uLicenseOnlineTime.pas` | Fetch ora UTC online (worldtimeapi) per anti-manomissione data di scadenza. |
-| `uSessionAuth.pas` | Token sessione engine `SI_SESSION.v2`: HMAC, variabili d'ambiente figlio, expiry 24h. |
-| `uMachineFingerprint.pas` | Fingerprint macchina via WMI (CPU, board, disk) + Base32 per binding licenza. |
+| `uLicenseService.pas` | API licenza applicazione: `LicenseIsValid`, `LicenseTryActivate`, `LicenseBuildSessionToken`, storage registry. |
+| `uLicenseOnlineTime.pas` | Fetch ora UTC online (worldtimeapi.org, timeapi.io) per anti-manomissione data di scadenza. |
+| `uSessionAuth.pas` | Token sessione motore `SI_SESSION.v2`: HMAC-SHA256, variabili d'ambiente processo figlio, expiry 24h. |
+| `uMachineFingerprint.pas` | Fingerprint macchina via WMI (CPU, board, disk) + Base32 per codici richiesta attivazione. |
 | `uActivationRequest.pas` | Codice richiesta attivazione `RQ1` (JSON base64url con fingerprint + username). |
 | `uBCryptApi.pas` | Dichiarazioni API Windows CNG (`bcrypt.dll`) per operazioni crittografiche native. |
 
@@ -101,6 +101,7 @@ Elenco completo di tutte le unità Delphi nel repository, organizzate per area f
 ```
 uMainForm
   ├── uPipeEngine → uLicenseService → uLicenseCodec (Common)
+  │                 └── uSessionAuth → uLicenseCodec (Common)
   ├── uAudioCapture → uWasapiCapture, uWasapi16k
   ├── uVoiceSegmenter
   ├── uGlobalKeyboardHook
@@ -108,6 +109,6 @@ uMainForm
 
 uAppStartup → uPipeEngine, uInterviewProfile
 
-uLicenseService → uLicenseCodec, uSessionAuth, uLicenseOnlineTime
-uSessionAuth → uLicenseCodec, uMachineFingerprint
+uLicenseService → uLicenseCodec, uSessionAuth, uLicenseOnlineTime, uRegistryStore
+uActivationRequest → uMachineFingerprint
 ```

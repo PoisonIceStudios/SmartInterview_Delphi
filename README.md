@@ -7,7 +7,7 @@ SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo tra
 | Stack | Tecnologia |
 |-------|------------|
 | Interfaccia | Delphi 12 VCL (Win64) |
-| Motore AI | .NET 10 subprocess (`SmartInterview.Engine.exe`) |
+| Motore AI | Assembly .NET 10 `SmartInterview.Engine.dll` (host `dotnet`) |
 | Speech-to-text | Whisper.net |
 | LLM | LLamaSharp / llama.cpp (CUDA12, Vulkan, CPU) |
 
@@ -17,11 +17,11 @@ SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo tra
 
 | Documento | Contenuto |
 |-----------|-----------|
-| [Architettura](docs/architecture.md) | Diagrammi, flussi, modalità ascolto, GPU backends |
+| [Architettura](docs/architecture.md) | Diagrammi, flussi, modalità ascolto, GPU backends, gate licenza |
 | [Setup e build](docs/setup.md) | Requisiti, compilazione, prima esecuzione, troubleshooting |
 | [Riferimento unità Pascal](docs/pas-reference.md) | Descrizione di ogni file `.pas` |
-| [Motore C# / IPC](docs/csharp-engine.md) | Subprocesso Engine, protocollo JSON, moduli .cs |
-| [Sistema licenze](docs/licensing.md) | Codec v4, attivazione, LicenseManager |
+| [Motore C# / DLL](docs/csharp-dll.md) | Assembly Engine, protocollo JSON, moduli `.cs` |
+| [Sistema licenze](docs/licensing.md) | Codec v4, attivazione, token sessione, LicenseManager |
 | [Unità condivise Common](docs/setup.md#common--unità-pascal-condivise) | Convenzioni per `.pas` multi-progetto |
 
 ---
@@ -36,11 +36,11 @@ SmartInterview_Delphi/
 │   │   ├── SmartInterview.dpr/.dproj
 │   │   ├── uMainForm.*             # Overlay colloquio
 │   │   ├── uFrm*.pas               # Form (licenza, splash, settings, …)
-│   │   └── src/                    # Unità Delphi (audio, IPC, settings)
+│   │   └── src/                    # Unità Delphi (audio, bridge engine, settings)
 │   └── LicenseManager/             # Tool generazione licenze
 ├── Common/                         # Unità Pascal condivise (es. uLicenseCodec)
-├── Engine/                         # Motore C# + IPC
-│   ├── Program.cs
+├── Engine/                         # Motore C# (.NET 10)
+│   ├── Program.cs                  # Entry point JSON stdin/stdout
 │   ├── SmartInterview.Engine.csproj
 │   └── *.cs
 ├── docs/                           # Documentazione dettagliata
@@ -52,20 +52,31 @@ SmartInterview_Delphi/
 ## Come funziona (in breve)
 
 ```mermaid
-flowchart LR
-  UI[Delphi UI] --> Pipe[uPipeEngine]
-  Pipe -->|JSON stdin| Eng[Engine.exe]
-  Eng -->|JSON stdout| Pipe
-  UI --> Audio[WASAPI 16kHz]
-  Audio --> UI
+flowchart TB
+  subgraph Delphi["SmartInterview.exe (Delphi)"]
+    UI[uMainForm]
+    Pipe[uPipeEngine]
+    Lic[uLicenseService]
+    UI --> Pipe
+    Lic -->|token + env vars| Pipe
+  end
+  subgraph Host["Processo figlio dotnet"]
+    DLL[SmartInterview.Engine.dll]
+    Auth[EngineSessionAuth]
+    Auth -->|gate licenza| DLL
+  end
+  Pipe -->|CreateProcess + pipe| Host
+  Pipe <-->|JSON stdin/stdout| DLL
+  UI --> Audio[WASAPI 16 kHz]
 ```
 
 1. **Avvio** — verifica licenza, disclaimer, splash con download/caricamento modelli.
-2. **Ascolto** — manuale (tieni Ctrl/Shift/Alt) o automatico (VAD su audio di sistema).
-3. **Trascrizione** — PCM inviato all'engine via IPC `transcribe` / `transcribe_stream`.
-4. **Risposta** — LLM locale in streaming (`generate_stream`); in modalità auto, `classify_utterance` filtra le non-domande.
+2. **Motore** — `uPipeEngine` avvia `dotnet SmartInterview.Engine.dll` dalla cartella `EngineDeploy\`, passando token di sessione e chiave licenza via variabili d'ambiente.
+3. **Ascolto** — manuale (tieni Ctrl/Shift/Alt) o automatico (VAD su audio di sistema).
+4. **Trascrizione** — PCM inviato al motore via IPC `transcribe` / `transcribe_stream`.
+5. **Risposta** — LLM locale in streaming (`generate_stream`); in modalità auto, `classify_utterance` filtra le non-domande.
 
-L'engine richiede un **token di sessione** valido (derivato dalla licenza) passato via variabili d'ambiente. Dettagli in [Architettura → Autenticazione sessione](docs/architecture.md#autenticazione-sessione-engine).
+Il motore **rifiuta tutti i comandi AI** senza autenticazione licenza valida. Dettagli in [Architettura → Gate licenza](docs/architecture.md#gate-licenza-motore-ai).
 
 ---
 
@@ -73,11 +84,11 @@ L'engine richiede un **token di sessione** valido (derivato dalla licenza) passa
 
 I modelli **non** sono nel repository. Al primo avvio vengono scaricati in `<exe>\models` o `%LOCALAPPDATA%\SmartInterview\models`.
 
-| Tier | LLM | Whisper |
-|------|-----|---------|
-| Fast | Qwen2.5-3B Q4_K_M | ggml-small |
-| Balanced | Qwen2.5-7B | ggml-medium |
-| Max | Qwen2.5-14B | ggml-large-v3 |
+| Tier | LLM (file locale) | Whisper (file locale) |
+|------|-------------------|------------------------|
+| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `whisper-fast.bin` (ggml-small) |
+| Balanced | `response-balanced.bin` (Qwen2.5-7B) | `whisper-balanced.bin` (ggml-medium) |
+| Max | `response-max.bin` (Qwen2.5-14B) | `whisper-max.bin` (ggml-large-v3) |
 
 Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazioni utente).
 
@@ -97,7 +108,7 @@ Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazi
 
 1. Apri `Projects.groupproj` in RAD Studio.
 2. Compila **SmartInterview** (Win64).
-3. L'engine viene buildato e deployato automaticamente in `Projects/SmartInterview/Win64/<Config>/EngineDeploy/`.
+3. La build Delphi esegue automaticamente `dotnet build` sull'engine e deploya l'output in `Projects/SmartInterview/Win64/<Config>/EngineDeploy/`.
 
 Build manuale engine:
 
@@ -122,7 +133,7 @@ Entrambi risolvono le unità condivise da `Common/` (search path `..\..\Common\`
 
 ## Impostazioni utente
 
-Salvate nel registry (`uRegistryStore.pas`):
+Salvate nel registry `HKCU\Software\SmartInterview` (`uRegistryStore.pas`):
 
 - Lingua (default `en`)
 - Tier modelli LLM e Whisper
@@ -136,7 +147,9 @@ Salvate nel registry (`uRegistryStore.pas`):
 
 ## Note per manutentori
 
-- **Engine discovery:** `<exe>\EngineDeploy\SmartInterview.Engine.exe` per primo (`uPipeEngine.FindEngineExe`).
+- **Discovery motore:** `uPipeEngine.FindEngineDll` cerca `SmartInterview.Engine.dll` in `EngineDeploy\` accanto a `SmartInterview.exe`.
+- **Avvio motore:** `CreateProcess` con comando `dotnet "<path>\SmartInterview.Engine.dll"` e pipe stdin/stdout per IPC JSON-lines.
+- **Gate licenza:** variabili `SMARTINTERVIEW_SESSION`, `SMARTINTERVIEW_LICENSE`, `SMARTINTERVIEW_USER` + validazione in `EngineSessionAuth.cs`.
 - **Memoria conversazione:** RAM in `LocalLlmClient.cs`; baseline tokens esclusi dalla % contesto UI.
 - **Manuale vs auto:** la cattura manuale risponde sempre; l'auto usa `classify_utterance` + marker `[[SKIP]]`.
 - **Nuovo comando IPC:** handler in `Engine/Program.cs` → wrapper `uPipeEngine.pas` → caller `uMainForm.pas`.

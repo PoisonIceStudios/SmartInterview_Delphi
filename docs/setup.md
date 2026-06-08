@@ -8,7 +8,7 @@
 |------------|----------|
 | Windows | 10/11 x64 |
 | RAD Studio | 12+ (Delphi, target Win64) |
-| .NET SDK | 10 |
+| .NET SDK | 10 (runtime host per `SmartInterview.Engine.dll`) |
 | GPU (consigliata) | NVIDIA con driver CUDA, oppure GPU Vulkan |
 
 ## Struttura directory
@@ -34,19 +34,35 @@ SmartInterview_Delphi/
 2. Seleziona piattaforma **Win64** e configurazione **Release** (o Debug).
 3. Compila.
 
-Dopo ogni build Win64, MSBuild esegue automaticamente:
+Dopo ogni build Win64, il `.dproj` esegue automaticamente:
 
 ```text
 dotnet build Engine\SmartInterview.Engine.csproj -c Release
 ```
 
-L'engine viene deployato in:
+Il target MSBuild `DeployEngineToDelphi` copia l'intero output (DLL, dipendenze .NET, runtime nativi CUDA/Vulkan/Whisper) in:
 
 ```text
 Projects/SmartInterview/Win64/<Configuration>/EngineDeploy/
 ```
 
 accanto a `SmartInterview.exe`.
+
+### Contenuto EngineDeploy
+
+| Elemento | Descrizione |
+|----------|-------------|
+| `SmartInterview.Engine.dll` | Assembly motore AI (entry point per `dotnet`) |
+| `*.dll` dipendenze | LLamaSharp, Whisper.net, System.* |
+| `runtimes\` | Backend nativi llama.cpp e whisper (CUDA12, Vulkan, CPU) |
+
+Delphi avvia il motore con:
+
+```text
+dotnet "<percorso>\EngineDeploy\SmartInterview.Engine.dll"
+```
+
+via `uPipeEngine.Start` (`CreateProcess` + pipe stdin/stdout).
 
 ### Build manuale engine
 
@@ -55,6 +71,12 @@ Se all'avvio compare "Engine not found":
 ```powershell
 cd C:\Users\devda\Documents\GitHub\SmartInterview_Delphi
 dotnet build Engine\SmartInterview.Engine.csproj -c Release
+```
+
+Verificare che esista:
+
+```text
+Projects\SmartInterview\Win64\Release\EngineDeploy\SmartInterview.Engine.dll
 ```
 
 ### Build LicenseManager
@@ -95,8 +117,6 @@ Per LicenseManager (senza cartella `src` locale):
 <DCC_UnitSearchPath>..\..\Common\;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
 ```
 
-Per aggiungere un nuovo progetto Delphi che usa `Common/`, includere almeno `..\..\Common\` nel search path come negli esempi sopra.
-
 ## Prima esecuzione
 
 1. Avvia `SmartInterview.exe`.
@@ -104,6 +124,8 @@ Per aggiungere un nuovo progetto Delphi che usa `Common/`, includere almeno `..\
 3. Accetta il disclaimer.
 4. Al primo avvio lo splash scarica i modelli Whisper e LLM (può richiedere diversi GB e tempo in base alla connessione).
 5. I modelli vengono salvati in `%LOCALAPPDATA%\SmartInterview\models\` o nella cartella `models\` accanto all'eseguibile.
+
+**Connessione internet richiesta** per: verifica ora UTC della licenza, autenticazione sessione motore, download modelli.
 
 ## Risorse opzionali
 
@@ -116,14 +138,15 @@ Per aggiungere un nuovo progetto Delphi che usa `Common/`, includere almeno `..\
 |-----|----------|
 | Trascrizione live | `%LOCALAPPDATA%\SmartInterview\live-transcribe-diag.log` |
 | Debug generale | `%LOCALAPPDATA%\SmartInterview\debug.log` |
-| Engine (stderr) | Console del processo figlio |
+| Motore (stderr) | Output diagnostico del processo `dotnet` figlio |
 
 ## Risoluzione problemi
 
 | Problema | Soluzione |
 |----------|-----------|
 | `uLicenseCodec` not found (LicenseManager) | Verificare `DCC_UnitSearchPath` punti a `..\..\Common\` |
-| Engine not found | Eseguire `dotnet build` sull'engine; verificare `EngineDeploy\` |
-| BRCC32 app.ico | Risolto: rimosso riferimento a icona custom |
-| GPU non usata | Controllare log engine; su RTX 50xx usare Vulkan |
+| Engine not found | Eseguire `dotnet build` sull'engine; verificare `EngineDeploy\SmartInterview.Engine.dll` |
+| `unauthorized` dal motore | Verificare licenza valida, connessione internet (ora UTC), username forum corretto |
+| GPU non usata | Controllare log stderr motore; su RTX 50xx usare Vulkan |
 | Licenza non valida | Connessione internet richiesta per verifica ora UTC |
+| Modelli mancanti | Controllare cartella `models\` o `%LOCALAPPDATA%\SmartInterview\models\` |

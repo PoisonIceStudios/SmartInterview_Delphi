@@ -6,37 +6,49 @@
 
 SmartInterview è un copilota desktop per colloqui tecnici su Windows. L'applicazione cattura l'audio di sistema (e opzionalmente il microfono), lo trascrive localmente con **Whisper**, e genera risposte in streaming da un modello **Qwen2.5 GGUF** caricato in locale. Durante il colloquio **non** vengono usate API cloud.
 
-Lo stack è ibrido:
+Lo stack è ibrido Delphi + .NET:
 
 | Componente | Tecnologia | Ruolo |
 |------------|------------|-------|
 | Interfaccia utente | Delphi 12 VCL (Win64) | Overlay, hotkey, tray, cattura audio WASAPI, licensing |
-| Motore AI | .NET 10 (`SmartInterview.Engine.exe`) | Whisper.net + LLamaSharp (llama.cpp) |
-| Comunicazione | Pipe stdin/stdout, JSON-lines | IPC tra Delphi e Engine |
+| Motore AI | `SmartInterview.Engine.dll` (.NET 10) | Whisper.net + LLamaSharp (llama.cpp) |
+| Bridge | `uPipeEngine.pas` | Avvia processo `dotnet`, pipe stdin/stdout, protocollo JSON-lines |
+| Gate licenza | `uSessionAuth` + `EngineSessionAuth` | Il motore accetta comandi solo con licenza valida |
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    SmartInterview.exe (Delphi)               │
-│  ┌──────────┐  ┌─────────────┐  ┌────────────────────────┐ │
-│  │ uMainForm│  │uAudioCapture│  │ uGlobalKeyboardHook    │ │
-│  │ overlay  │  │ WASAPI 16kHz│  │ Ctrl/Shift/Alt hold    │ │
-│  └────┬─────┘  └──────┬──────┘  └────────────────────────┘ │
-│       │               │ PCM float32                            │
-│       ▼               ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │              uPipeEngine (spawn + JSON IPC)              │ │
-│  └──────────────────────────┬──────────────────────────────┘ │
-└─────────────────────────────┼────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                 SmartInterview.exe (Delphi Win64)                 │
+│  ┌──────────┐  ┌─────────────┐  ┌────────────────────────────┐  │
+│  │ uMainForm│  │uAudioCapture│  │ uGlobalKeyboardHook        │  │
+│  │ overlay  │  │ WASAPI 16kHz│  │ Ctrl/Shift/Alt hold        │  │
+│  └────┬─────┘  └──────┬──────┘  └────────────────────────────┘  │
+│       │               │ PCM float32                                │
+│       ▼               ▼                                          │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ uLicenseService ──► uSessionAuth (token + env vars)        │  │
+│  └──────────────────────────┬─────────────────────────────────┘  │
+│                             │                                     │
+│  ┌──────────────────────────▼─────────────────────────────────┐  │
+│  │              uPipeEngine (CreateProcess + pipe)              │  │
+│  └──────────────────────────┬─────────────────────────────────┘  │
+└─────────────────────────────┼────────────────────────────────────┘
+                              │ dotnet SmartInterview.Engine.dll
                               │ stdin/stdout JSON-lines
                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│              SmartInterview.Engine.exe (.NET 10)             │
-│  ┌──────────────┐  ┌────────────────┐  ┌─────────────────┐ │
-│  │ Transcriber  │  │ LocalLlmClient │  │ HardwareProbe   │ │
-│  │ Whisper.net  │  │ LLamaSharp     │  │ CUDA/Vulkan/CPU │ │
-│  └──────────────┘  └────────────────┘  └─────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│           Processo host .NET (SmartInterview.Engine.dll)          │
+│  ┌─────────────────────┐                                         │
+│  │ EngineSessionAuth   │ ◄── gate: licenza + token + ora online  │
+│  └──────────┬──────────┘                                         │
+│             ▼                                                     │
+│  ┌──────────────┐  ┌────────────────┐  ┌─────────────────┐     │
+│  │ Transcriber  │  │ LocalLlmClient │  │ HardwareProbe   │     │
+│  │ Whisper.net  │  │ LLamaSharp     │  │ CUDA/Vulkan/CPU │     │
+│  └──────────────┘  └────────────────┘  └─────────────────┘     │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+> **Nota:** Delphi **non** carica la DLL in-process (nessun `LoadLibrary` / P/Invoke verso il motore). Il bridge avvia un **processo figlio** che esegue l'assembly .NET tramite il runtime `dotnet`, con comunicazione JSON su pipe standard.
 
 ## Progetti nel repository
 
@@ -44,49 +56,87 @@ Lo stack è ibrido:
 |----------|----------|-------|
 | SmartInterview | `Projects/SmartInterview/` | Applicazione principale |
 | LicenseManager | `Projects/LicenseManager/` | Tool interno per generare/gestire licenze |
-| Engine | `Engine/` | Subprocess C# per AI |
+| Engine | `Engine/` | Assembly C# motore AI |
 | Common | `Common/` | Unità Pascal condivise |
 | Group project | `Projects.groupproj` | Build di entrambi i progetti Delphi |
 
 ## Flusso di avvio
 
-1. **Mutex single-instance** — una sola istanza dell'app.
+1. **Mutex single-instance** — una sola istanza dell'app (`SmartInterview.dpr`).
 2. **Licenza** (`uFrmLicense` → `uLicenseService`) — verifica chiave + ora UTC online.
-3. **Disclaimer** (`uFrmDisclaimer`) — accettazione obbligatoria.
+3. **Disclaimer** (`uFrmDisclaimer`) — accettazione obbligatoria (EULA v3).
 4. **Setup colloquio** (`uFrmInterviewSetup`) — prompt opzionale profilo.
 5. **Splash** (`uFrmSplash` → `uAppStartup.RunInitialStartup`):
-   - Avvia `SmartInterview.Engine.exe` da `Win64\<Config>\EngineDeploy\`.
+   - `TPipeEngine.Start` avvia `dotnet SmartInterview.Engine.dll` da `Win64\<Config>\EngineDeploy\`.
+   - Passa token sessione e credenziali licenza via variabili d'ambiente.
    - IPC `ping` → `startup`: download/caricamento modelli Whisper + LLM, warm-up, profilo.
-6. **Main form** — riusa l'engine già avviato dallo splash.
+6. **Main form** — riusa l'istanza `TPipeEngine` già avviata dallo splash (`TakeStartupEngine`).
 
-## Autenticazione sessione Engine
+## Gate licenza motore AI
 
-L'engine rifiuta i comandi AI senza un token di sessione valido:
+La comunicazione con il motore è **bloccata** finché la licenza non è verificata. Il flusso è simmetrico tra Delphi e C#.
 
-1. Delphi costruisce `SI_SESSION.v2.<expiry>.<machineId>.<hmac>` (`uSessionAuth.pas`).
-2. All'avvio del processo figlio, Delphi imposta le variabili d'ambiente `SMARTINTERVIEW_SESSION`, `SMARTINTERVIEW_LICENSE`, `SMARTINTERVIEW_USER`.
-3. L'engine valida HMAC + fingerprint macchina + scadenza (`Engine/EngineSessionAuth.cs`) prima di ogni comando.
-4. Il comando `startup` invia anche `session_token` per ridondanza.
+### Lato Delphi
 
-Build Debug dell'engine (`DIAGNOSTIC_LOG`) permettono test locali senza variabili d'ambiente.
+1. `LicenseBuildSessionToken` (`uLicenseService`) richiede licenza valida in registry.
+2. Costruisce token `SI_SESSION.v2.<expiry_unix>.<username_b64>.<hmac_b64>` (`uSessionAuth.pas`).
+3. `TPipeEngine.Start` chiama `SessionBuildChildEnvironment` che imposta nel processo figlio:
+   - `SMARTINTERVIEW_SESSION` — token HMAC
+   - `SMARTINTERVIEW_LICENSE` — chiave licenza
+   - `SMARTINTERVIEW_USER` — username forum normalizzato
+4. Il comando `startup` include anche `session_token` nel JSON per conferma ridondante.
+
+### Lato motore (`EngineSessionAuth.cs`)
+
+All'avvio del processo:
+
+1. `TryAuthenticateFromEnvironment` legge le tre variabili d'ambiente.
+2. Valida: formato token, scadenza (24h), username corrispondente, **ora UTC online** (`OnlineTime.cs`), **chiave licenza v4** (`LicenseCodec.cs`), firma HMAC.
+3. Se fallisce → `_authenticated = false` → tutti i comandi (eccetto `shutdown`) rispondono `{ "ok": false, "error": "unauthorized" }`.
+4. Il comando `startup` richiede inoltre `session_token` nel payload e verifica corrispondenza con il token d'ambiente.
+
+Build Debug dell'engine (`DIAGNOSTIC_LOG`) consente bypass diagnostico senza handshake licenza.
+
+```mermaid
+sequenceDiagram
+  participant D as Delphi uPipeEngine
+  participant L as uLicenseService
+  participant E as EngineSessionAuth
+  participant P as Program.cs
+
+  L->>D: LicenseBuildSessionToken()
+  D->>D: SessionBuildChildEnvironment()
+  D->>P: CreateProcess(dotnet Engine.dll)
+  P->>E: TryAuthenticateFromEnvironment()
+  alt licenza valida
+    E-->>P: authenticated = true
+    D->>P: startup + session_token
+    P->>E: TryConfirmStartupToken()
+    P-->>D: ok, modelli caricati
+  else licenza assente/invalida
+    E-->>P: authenticated = false
+    D->>P: qualsiasi comando AI
+    P-->>D: unauthorized
+  end
+```
 
 ## Modalità di ascolto
 
 ### Manuale (tieni premuto Ctrl/Shift/Alt)
 
-- Cattura audio finché il tasto è premuto.
+- Cattura audio finché il tasto è premuto (`uGlobalKeyboardHook`).
 - Anteprima live ogni ~450 ms (trascrizione full-buffer).
-- Al rilascio: trascrizione finale → risposta sempre generata (`StreamAnswer` forzato).
+- Al rilascio: trascrizione finale → risposta sempre generata.
 
 ### Automatica (VAD)
 
-- `TVoiceSegmenter` segmenta l'audio di sistema per attività vocale.
+- `TVoiceSegmenter` (Delphi) segmenta l'audio di sistema per attività vocale.
 - Anteprima live durante il segmento.
-- A fine segmento: `classify_utterance` → salta non-domande/duplicati → streaming risposta (rispetta `[[SKIP]]`).
+- A fine segmento: `classify_utterance` → salta non-domande/duplicati → streaming risposta (rispetta `[[SKIP]]` nel prompt LLM).
 
 ## Rilevamento hardware e backend GPU
 
-`Engine/HardwareProbe.cs` rileva GPU NVIDIA (incluso Blackwell RTX 50xx).
+`Engine/HardwareProbe.cs` rileva GPU NVIDIA (incluso Blackwell RTX 50xx) e VRAM da registry.
 
 `Engine/NativeBackendBootstrap.cs` seleziona il backend llama.cpp:
 
@@ -105,6 +155,8 @@ I modelli **non** sono nel repository. Al primo avvio vengono scaricati in:
 - `<exe>\models\`, oppure
 - `%LOCALAPPDATA%\SmartInterview\models\`
 
+Quando il motore gira da `EngineDeploy\`, `AppPaths.cs` risale alla cartella `models\` accanto a `SmartInterview.exe` per evitare download duplicati.
+
 Cataloghi: `Engine/ModelCatalog.cs`, `Engine/WhisperModelCatalog.cs` (mirror Delphi in `uModelCat.pas`, `uWhisperCat.pas`).
 
 | Tier | LLM | Whisper |
@@ -115,11 +167,11 @@ Cataloghi: `Engine/ModelCatalog.cs`, `Engine/WhisperModelCatalog.cs` (mirror Del
 
 ## Impostazioni persistenti
 
-Registry via `uRegistryStore.pas`: lingua, tier modelli, lunghezza risposta, tasto ascolto, opacità overlay, profilo colloquio (ruolo/stack/job/experienza), parametri VAD.
+Registry `HKCU\Software\SmartInterview` via `uRegistryStore.pas`: lingua, tier modelli, lunghezza risposta, tasto ascolto, opacità overlay, profilo colloquio (ruolo/stack/job/esperienza), parametri VAD.
 
 ## Documentazione correlata
 
 - [Setup e build](setup.md)
-- [Motore C# / IPC](csharp-engine.md)
+- [Motore C# / DLL](csharp-dll.md)
 - [Riferimento unità Pascal](pas-reference.md)
 - [Sistema licenze](licensing.md)
