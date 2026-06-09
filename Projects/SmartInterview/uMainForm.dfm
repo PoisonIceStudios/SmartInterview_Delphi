@@ -2,7 +2,7 @@ object MainForm: TMainForm
   Left = 0
   Top = 0
   Caption = 'SmartInterview'
-  ClientHeight = 480
+  ClientHeight = 479
   ClientWidth = 430
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -41,9 +41,9 @@ object MainForm: TMainForm
         OnPaint = pbWaveformPaint
       end
       object pbMic: TPaintBox
-        Left = 47
+        Left = 51
         Top = 6
-        Width = 28
+        Width = 32
         Height = 28
         OnPaint = pbMicPaint
       end
@@ -56,6 +56,8 @@ object MainForm: TMainForm
       Align = alClient
       BevelOuter = bvNone
       TabOrder = 0
+      ExplicitLeft = 88
+      ExplicitTop = 2
       object btnPin: TSpeedButton
         Left = 305
         Top = 0
@@ -188,7 +190,7 @@ object MainForm: TMainForm
     Left = 0
     Top = 40
     Width = 430
-    Height = 412
+    Height = 411
     Align = alClient
     BevelOuter = bvNone
     Ctl3D = True
@@ -199,8 +201,6 @@ object MainForm: TMainForm
     ParentBackground = False
     ParentCtl3D = False
     TabOrder = 1
-    ExplicitLeft = 17
-    ExplicitTop = 46
     object lblHeard: TLabel
       Left = 16
       Top = 8
@@ -229,8 +229,7 @@ object MainForm: TMainForm
       Font.Name = 'Segoe UI Semibold'
       Font.Style = [fsBold]
       ParentFont = False
-      ExplicitLeft = 136
-      ExplicitTop = 143
+      ExplicitWidth = 58
     end
     object txtTranscript: TMemo
       Left = 16
@@ -245,7 +244,7 @@ object MainForm: TMainForm
       Left = 16
       Top = 110
       Width = 398
-      Height = 294
+      Height = 293
       Align = alClient
       Font.Charset = ANSI_CHARSET
       Font.Color = clWindowText
@@ -255,11 +254,12 @@ object MainForm: TMainForm
       ParentFont = False
       ReadOnly = True
       TabOrder = 1
+      ExplicitTop = 112
     end
   end
   object pnlStatus: TPanel
     Left = 0
-    Top = 452
+    Top = 451
     Width = 430
     Height = 28
     Align = alBottom
@@ -272,16 +272,21 @@ object MainForm: TMainForm
       Width = 430
       Height = 28
       Align = alClient
+      Alignment = taCenter
+      BiDiMode = bdLeftToRight
       Caption = 'Ready'
+      Color = clDefault
+      ParentBiDiMode = False
+      ParentColor = False
+      Transparent = True
       Layout = tlCenter
-      ExplicitLeft = 16
       ExplicitWidth = 32
       ExplicitHeight = 15
     end
   end
   object mnuMain: TPopupMenu
-    Left = 48
-    Top = 80
+    Left = 32
+    Top = 160
     object miInterview: TMenuItem
       Caption = 'Interview'
       object miSetup: TMenuItem
@@ -658,12 +663,12 @@ object MainForm: TMainForm
     Hint = 'SmartInterview'
     PopupMenu = mnuTray
     OnDblClick = trayIconDblClick
-    Left = 16
-    Top = 80
+    Left = 376
+    Top = 392
   end
   object mnuTray: TPopupMenu
     Left = 88
-    Top = 80
+    Top = 160
     object miTrayShow: TMenuItem
       Caption = 'Show / bring to front'
       OnClick = trayIconDblClick
@@ -677,35 +682,35 @@ object MainForm: TMainForm
     Enabled = False
     Interval = 450
     OnTimer = tmrLiveTimer
-    Left = 160
-    Top = 80
+    Left = 144
+    Top = 160
   end
   object tmrRead: TTimer
     Enabled = False
     Interval = 600
     OnTimer = tmrReadTimer
     Left = 200
-    Top = 80
+    Top = 160
   end
   object tmrAnim: TTimer
     Enabled = False
     Interval = 25
     OnTimer = tmrAnimTimer
-    Left = 240
-    Top = 80
+    Left = 256
+    Top = 160
   end
   object tmrIcon: TTimer
     Enabled = False
     Interval = 100
     OnTimer = tmrIconTimer
-    Left = 280
-    Top = 80
+    Left = 312
+    Top = 160
   end
   object tmrEngine: TTimer
     Enabled = False
     Interval = 30000
     OnTimer = tmrEngineTimer
-    Left = 320
-    Top = 80
+    Left = 368
+    Top = 160
   end
 end

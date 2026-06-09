@@ -883,7 +883,18 @@ end;
 
 procedure TMainForm.OnListeningKeyPressed;
 begin
-  if FModelBusy or not FReady or FListening or FAutoMode then Exit;
+  if not FReady or FListening or FAutoMode then Exit;
+  // Barge-in: if the model is mid-answer, abandon that answer so the user can immediately ask a
+  // new question instead of waiting for the generation to finish. Bumping the answer generation
+  // makes any in-flight stream's tokens be ignored, and CancelGeneration tells the engine to stop
+  // generating right now (it honours the cancel mid-stream), freeing it for the new question. The
+  // finalize step on key release still waits for the model to be free, which now happens quickly.
+  if FModelBusy then
+  begin
+    Inc(FAutoAnswerGen);
+    FStreamSkip := True;
+    FEngine.CancelGeneration;
+  end;
   StopReadAlong;
   FListening := True;
   FLastLivePreview := '';

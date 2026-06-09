@@ -17,6 +17,7 @@ namespace SmartInterview
         private WhisperProcessor? _processor;
         private WhisperProcessor? _liveProcessor;
         private volatile string _language = "en";
+        private volatile string _promptHint = "";
         private volatile bool _needsRebuild;
         private bool _disposed;
         private string? _runtimeInfo;
@@ -73,6 +74,22 @@ namespace SmartInterview
             _needsRebuild = true;
         }
 
+        /// <summary>
+        /// Sets an initial prompt that biases Whisper toward the interview's technical vocabulary
+        /// (product names, frameworks, English jargon). Whisper conditions its decoding on this
+        /// text, so terms like "Unity", "React" or ".NET" are recognised and spelled correctly
+        /// instead of being mangled into ordinary words. Kept short to avoid the model echoing it.
+        /// Rebuilds processors on next inference.
+        /// </summary>
+        public void SetPromptHint(string hint)
+        {
+            hint = (hint ?? string.Empty).Trim();
+            if (hint.Length > 220) hint = hint.Substring(0, 220);
+            if (hint == _promptHint) return;
+            _promptHint = hint;
+            _needsRebuild = true;
+        }
+
         /// <summary>Cancels an in-flight live preview transcription so a fresher chunk can run.</summary>
         public void CancelInFlight()
         {
@@ -123,26 +140,30 @@ namespace SmartInterview
             // EntropyThreshold/LogProbThreshold mark a low-quality decode (noise-driven, high
             // entropy / low confidence). They feed the same no-speech logic we then enforce in
             // IsHallucination, and cost nothing on clean speech.
-            _processor = _factory!.CreateBuilder()
+            var finalBuilder = _factory!.CreateBuilder()
                 .WithLanguage(_language)
                 .WithNoContext()
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.7f)
                 .WithEntropyThreshold(2.4f)
-                .WithLogProbThreshold(-1.0f)
-                .Build();
+                .WithLogProbThreshold(-1.0f);
+            if (_promptHint.Length > 0)
+                finalBuilder = finalBuilder.WithPrompt(_promptHint);
+            _processor = finalBuilder.Build();
 
             // Live pass: shorter windows, faster first callback, stricter silence gate.
-            _liveProcessor = _factory.CreateBuilder()
+            var liveBuilder = _factory.CreateBuilder()
                 .WithLanguage(_language)
                 .WithNoContext()
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.85f)
                 .WithEntropyThreshold(2.4f)
-                .WithLogProbThreshold(-1.0f)
-                .Build();
+                .WithLogProbThreshold(-1.0f);
+            if (_promptHint.Length > 0)
+                liveBuilder = liveBuilder.WithPrompt(_promptHint);
+            _liveProcessor = liveBuilder.Build();
 
             _needsRebuild = false;
         }
@@ -155,6 +176,104 @@ namespace SmartInterview
             for (int i = 0; i < dummy.Length; i++)
                 dummy[i] = (float)(rnd.NextDouble() * 0.1 - 0.05);
             await TranscribeStreamAsync(dummy, _ => { }, ct, cancelPrevious: false, liveMode: true);
+        }
+
+        // Light ASR front-end, in spirit similar to what WebRTC/voice apps run before their
+        // recogniser: (1) remove DC offset, (2) high-pass to kill rumble and plosive thumps,
+        // (3) AGC toward a healthy loudness with a hard peak limiter. A distant/low-gain mic or
+        // low-frequency room noise is the usual reason Whisper mishears whole phrases; this makes
+        // the speech the model actually sees consistent and clear. Upstream gates already removed
+        // pure silence, so what arrives here is real speech.
+        private static void PreprocessForAsr(float[] x)
+        {
+            int n = x.Length;
+            if (n == 0) return;
+
+            // 1) DC offset removal.
+            double mean = 0;
+            for (int i = 0; i < n; i++) mean += x[i];
+            float dc = (float)(mean / n);
+
+            // 2) One-pole high-pass (~80 Hz @ 16 kHz): y[i] = a*(y[i-1] + x[i] - x[i-1]).
+            const float a = 0.985f;
+            float prevX = 0f, prevY = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float xi = x[i] - dc;
+                float yi = a * (prevY + xi - prevX);
+                prevX = xi;
+                prevY = yi;
+                x[i] = yi;
+            }
+
+            // 3) RMS-based AGC (boost-only) with a peak limiter so we never clip.
+            double sumSq = 0;
+            float peak = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float ax = x[i] < 0 ? -x[i] : x[i];
+                if (ax > peak) peak = ax;
+                sumSq += (double)x[i] * x[i];
+            }
+            if (peak < 1e-4f) return;                    // essentially silent
+            float rms = (float)Math.Sqrt(sumSq / n);
+            float gain = rms > 1e-6f ? 0.12f / rms : 1f; // target ~ -18 dBFS speech level
+            if (gain < 1f) gain = 1f;                    // only ever lift quiet audio
+            if (gain > 12f) gain = 12f;                  // don't over-amplify noise/near-silence
+            if (peak * gain > 0.97f) gain = 0.97f / peak; // hard peak safety (may trim if hot)
+            if (gain != 1f)
+                for (int i = 0; i < n; i++) x[i] *= gain;
+        }
+
+        // Diagnostic: when SMARTINTERVIEW_DUMP_AUDIO=1, write exactly what the final pass feeds to
+        // Whisper (post-preprocessing, 16 kHz mono) to %LOCALAPPDATA%\SmartInterview\
+        // last-whisper-input.wav. Playing it back instantly reveals whether a misheard phrase is a
+        // wrong/quiet/noisy capture or a genuine model miss.
+        private static void MaybeDumpWav(float[] samples)
+        {
+            var flag = Environment.GetEnvironmentVariable("SMARTINTERVIEW_DUMP_AUDIO");
+            if (flag is not ("1" or "true" or "TRUE")) return;
+            try
+            {
+                string dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "SmartInterview");
+                Directory.CreateDirectory(dir);
+                string path = Path.Combine(dir, "last-whisper-input.wav");
+                WriteWav16k(path, samples);
+                DebugLog.Write($"[Whisper] dumped input audio -> {path} ({samples.Length} samples)");
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"[Whisper] wav dump failed: {ex.Message}");
+            }
+        }
+
+        private static void WriteWav16k(string path, float[] samples)
+        {
+            const int rate = 16000;
+            int dataBytes = samples.Length * 2;
+            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+            using var bw = new BinaryWriter(fs);
+            bw.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            bw.Write(36 + dataBytes);
+            bw.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+            bw.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+            bw.Write(16);
+            bw.Write((short)1);          // PCM
+            bw.Write((short)1);          // mono
+            bw.Write(rate);
+            bw.Write(rate * 2);          // byte rate
+            bw.Write((short)2);          // block align
+            bw.Write((short)16);         // bits per sample
+            bw.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+            bw.Write(dataBytes);
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float v = samples[i];
+                if (v > 1f) v = 1f; else if (v < -1f) v = -1f;
+                bw.Write((short)(v * 32767f));
+            }
         }
 
         public async Task<string> TranscribeAsync(float[] samples, CancellationToken ct)
@@ -170,6 +289,10 @@ namespace SmartInterview
         {
             if (samples.Length < 1600) return;
             if (_disposed) return;
+
+            PreprocessForAsr(samples);
+            if (!liveMode)
+                MaybeDumpWav(samples);
 
             if (cancelPrevious)
                 CancelInFlight();

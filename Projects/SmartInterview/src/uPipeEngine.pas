@@ -59,6 +59,14 @@ type
     function SendAndWait(const BuildJson: TFunc<Integer, string>; TimeoutMs: Cardinal;
       CancelEvt: TEvent; out Obj: TJSONObject): Boolean;
     procedure ApplyContextFromObj(Obj: TJSONObject);
+    // Marshal an engine event to the main thread. The values are passed BY PARAMETER (not
+    // captured from ReaderLoop locals) so each queued closure owns its own copy — otherwise
+    // the reader thread overwrites the shared captured variable while a still-pending closure
+    // reads it, tearing the managed string's refcount and crashing with an access violation
+    // (seen mid-download when progress events fire rapidly).
+    procedure DispatchProgress(const Phase: string; Progress: Double);
+    procedure DispatchToken(const Token: string);
+    procedure DispatchTranscribePart(const Part: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -600,6 +608,33 @@ begin
   FContextPct := Round(JsonGetDouble(Obj, 'context_pct', FContextPct));
 end;
 
+procedure TPipeEngine.DispatchProgress(const Phase: string; Progress: Double);
+begin
+  TPipeThreadInvoker.QueueMain(procedure
+  begin
+    if Assigned(FOnProgress) then
+      FOnProgress(Self, Phase, Progress);
+  end);
+end;
+
+procedure TPipeEngine.DispatchToken(const Token: string);
+begin
+  TPipeThreadInvoker.QueueMain(procedure
+  begin
+    if Assigned(FOnToken) then
+      FOnToken(Self, Token);
+  end);
+end;
+
+procedure TPipeEngine.DispatchTranscribePart(const Part: string);
+begin
+  TPipeThreadInvoker.QueueMain(procedure
+  begin
+    if Assigned(FOnTranscribePart) then
+      FOnTranscribePart(Self, Part);
+  end);
+end;
+
 procedure TPipeEngine.ReaderLoop;
 var
   Line: string;
@@ -609,9 +644,6 @@ var
   Token: string;
   Phase: string;
   Progress: Double;
-  TokCopy: string;
-  PhaseCopy: string;
-  ProgressCopy: Double;
   CloneObj, Old: TJSONObject;
 begin
   EnsurePending;
@@ -655,42 +687,20 @@ begin
       begin
         Token := Obj.GetValue<string>('token', '');
         if Assigned(FOnToken) then
-        begin
-          TokCopy := Token;
-          TPipeThreadInvoker.QueueMain(procedure
-          begin
-            if Assigned(FOnToken) then
-              FOnToken(Self, TokCopy);
-          end);
-        end;
+          DispatchToken(Token);
       end
       else if EvType = 'transcribe_part' then
       begin
         Token := Obj.GetValue<string>('text', '');
         if Assigned(FOnTranscribePart) then
-        begin
-          TokCopy := Token;
-          TPipeThreadInvoker.QueueMain(procedure
-          begin
-            if Assigned(FOnTranscribePart) then
-              FOnTranscribePart(Self, TokCopy);
-          end);
-        end;
+          DispatchTranscribePart(Token);
       end
       else if EvType = 'progress' then
       begin
         Phase := Obj.GetValue<string>('phase', '');
         Progress := JsonGetDouble(Obj, 'progress', -1);
         if Assigned(FOnProgress) then
-        begin
-          PhaseCopy := Phase;
-          ProgressCopy := Progress;
-          TPipeThreadInvoker.QueueMain(procedure
-          begin
-            if Assigned(FOnProgress) then
-              FOnProgress(Self, PhaseCopy, ProgressCopy);
-          end);
-        end;
+          DispatchProgress(Phase, Progress);
       end;
     finally
       Obj.Free;

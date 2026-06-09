@@ -13,6 +13,8 @@ internal static class Program
     private static readonly Transcriber Transcriber = new();
     private static readonly LocalLlmClient Llm = new();
     private static CancellationTokenSource? _streamCts;
+    private static readonly object _streamCtsLock = new();
+    private static readonly object _stdoutLock = new();
     private static bool _authInitialized;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -32,6 +34,24 @@ internal static class Program
         WhisperBackendBootstrap.Configure(LogEngine);
     }
 
+    // Build a compact Whisper initial-prompt from the interview profile so domain terms (product
+    // names, frameworks, English jargon like "Unity"/"React"/".NET") are recognised instead of
+    // being misheard as ordinary words. The Transcriber caps the final length.
+    private static string BuildWhisperHint(InterviewProfile p)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Add(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return;
+            if (sb.Length > 0) sb.Append(". ");
+            sb.Append(s.Trim());
+        }
+        Add(p.Role);
+        Add(p.TechStack);
+        Add(p.JobDescription);
+        return sb.ToString();
+    }
+
     private static async Task<int> Main()
     {
         ConfigureNativeBackend();
@@ -47,10 +67,31 @@ internal static class Program
             LogEngine("Session authenticated from environment.");
         _authInitialized = true;
 
-        string? line;
-        while ((line = await Console.In.ReadLineAsync()) != null)
+        // Stdin is read on a dedicated task so cancellation can be honoured *while* a long
+        // generation or transcription is running. Commands are otherwise processed strictly in
+        // order on this thread; a cancel command takes the fast path and acts immediately, because
+        // the ordered loop is blocked awaiting the very operation being cancelled and cannot read
+        // the next line itself.
+        var queue = new System.Collections.Concurrent.BlockingCollection<string>(
+            new System.Collections.Concurrent.ConcurrentQueue<string>());
+        var reader = Task.Run(async () =>
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                string? line;
+                while ((line = await Console.In.ReadLineAsync()) != null)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    if (TryHandleImmediate(line)) continue;
+                    queue.Add(line);
+                }
+            }
+            catch { /* stdin closed */ }
+            finally { queue.CompleteAdding(); }
+        });
+
+        foreach (var line in queue.GetConsumingEnumerable())
+        {
             try
             {
                 using var doc = JsonDocument.Parse(line);
@@ -64,7 +105,37 @@ internal static class Program
                 Write(new { type = "error", id = 0, error = ex.Message });
             }
         }
+        await reader;
         return 0;
+    }
+
+    // Fast-path handler for cancellation, run on the stdin reader thread so it is actioned even
+    // while the ordered loop is busy. Returns true when the line was a cancel command (already
+    // actioned + replied). Anything else returns false and is processed in order via the queue.
+    private static bool TryHandleImmediate(string line)
+    {
+        if (line.IndexOf("cancel", StringComparison.Ordinal) < 0)
+            return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            var cmd = root.TryGetProperty("cmd", out var c) ? c.GetString() : null;
+            var id = root.TryGetProperty("id", out var i) ? i.GetInt32() : 0;
+            switch (cmd)
+            {
+                case "cancel_generation":
+                    lock (_streamCtsLock) { try { _streamCts?.Cancel(); } catch { } }
+                    Reply(id, new { ok = true, cancelled = true });
+                    return true;
+                case "cancel_transcribe":
+                    Transcriber.CancelInFlight();
+                    Reply(id, new { ok = true });
+                    return true;
+            }
+        }
+        catch { /* not a clean cancel line: let the ordered loop deal with it */ }
+        return false;
     }
 
     private static async Task HandleAsync(string? cmd, int id, JsonElement root)
@@ -123,6 +194,7 @@ internal static class Program
                 WriteEvent(id, "progress", new { phase = "text_init", progress = -1 });
                 await Llm.LoadAsync(level, CancellationToken.None);
                 Llm.SetProfile(profile);
+                Transcriber.SetPromptHint(BuildWhisperHint(profile));
                 Llm.SetAnswerLength(len);
                 WriteEvent(id, "progress", new { phase = "text_init", progress = -1 });
                 await Llm.WarmUpAsync(CancellationToken.None);
@@ -255,6 +327,7 @@ internal static class Program
                     Experience = root.TryGetProperty("experience", out var e) ? e.GetString() ?? "" : "",
                 };
                 Llm.SetProfile(profile);
+                Transcriber.SetPromptHint(BuildWhisperHint(profile));
                 Reply(id, new { ok = true });
                 break;
             }
@@ -288,10 +361,14 @@ internal static class Program
             case "generate_stream":
             {
                 var question = root.GetProperty("question").GetString() ?? "";
-                _streamCts?.Cancel();
-                _streamCts?.Dispose();
-                _streamCts = new CancellationTokenSource();
-                var streamCt = _streamCts.Token;
+                CancellationToken streamCt;
+                lock (_streamCtsLock)
+                {
+                    _streamCts?.Cancel();
+                    _streamCts?.Dispose();
+                    _streamCts = new CancellationTokenSource();
+                    streamCt = _streamCts.Token;
+                }
                 try
                 {
                     await Llm.GenerateStreamAsync(question, tok =>
@@ -335,8 +412,11 @@ internal static class Program
             writer.WriteEndObject();
         }
         var json = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-        Console.Out.WriteLine(json);
-        Console.Out.Flush();
+        lock (_stdoutLock)
+        {
+            Console.Out.WriteLine(json);
+            Console.Out.Flush();
+        }
     }
 
     private static void WriteEvent(int id, string type, object data)
@@ -353,13 +433,19 @@ internal static class Program
             writer.WriteEndObject();
         }
         var json = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-        Console.Out.WriteLine(json);
-        Console.Out.Flush();
+        lock (_stdoutLock)
+        {
+            Console.Out.WriteLine(json);
+            Console.Out.Flush();
+        }
     }
 
     private static void Write(object obj)
     {
-        Console.Out.WriteLine(JsonSerializer.Serialize(obj, JsonOpts));
-        Console.Out.Flush();
+        lock (_stdoutLock)
+        {
+            Console.Out.WriteLine(JsonSerializer.Serialize(obj, JsonOpts));
+            Console.Out.Flush();
+        }
     }
 }

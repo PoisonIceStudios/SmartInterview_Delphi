@@ -259,30 +259,62 @@ end;
 procedure ResampleTo16k(const Mono: TArray<Single>; SampleRate: Integer;
   var Pos: Double; var Last: Single; out Output: TArray<Single>);
 var
-  Ratio: Double;
+  Ratio, P, NextP, Frac, A, B, Sum: Double;
   OutList: TList<Single>;
-  Idx: Integer;
-  Frac, A, B: Double;
-  P: Double;
+  Idx, StartI, EndI, I, Cnt, N: Integer;
 begin
   OutList := TList<Single>.Create;
   try
+    N := Length(Mono);
     Ratio := SampleRate / WASAPI_TARGET_RATE;
     P := Pos;
-    while P < Length(Mono) do
+    if Ratio <= 1.0 then
     begin
-      Idx := Floor(P);
-      Frac := P - Idx;
-      if Idx = 0 then
-        A := Last
-      else
-        A := Mono[Idx - 1];
-      B := Mono[Idx];
-      OutList.Add(Single(A + (B - A) * Frac));
-      P := P + Ratio;
+      // Same rate or upsampling: linear interpolation (no aliasing concern).
+      while P < N do
+      begin
+        Idx := Floor(P);
+        Frac := P - Idx;
+        if Idx <= 0 then
+          A := Last
+        else
+          A := Mono[Idx - 1];
+        B := Mono[Idx];
+        OutList.Add(Single(A + (B - A) * Frac));
+        P := P + Ratio;
+      end;
+    end
+    else
+    begin
+      // Downsampling (e.g. 48 kHz -> 16 kHz): average the input window mapped to each output
+      // sample. This box low-pass removes the content above the 8 kHz Nyquist that would
+      // otherwise alias and smear consonants/sibilants — a dominant cause of badly misheard
+      // words. Cheap, and far more accurate than plain point/linear decimation.
+      while P < N do
+      begin
+        NextP := P + Ratio;
+        StartI := Floor(P);
+        if StartI < 0 then
+          StartI := 0;
+        EndI := Ceil(NextP) - 1;
+        if EndI >= N then
+          EndI := N - 1;
+        if EndI < StartI then
+          EndI := StartI;
+        Sum := 0;
+        Cnt := 0;
+        for I := StartI to EndI do
+        begin
+          Sum := Sum + Mono[I];
+          Inc(Cnt);
+        end;
+        if Cnt > 0 then
+          OutList.Add(Single(Sum / Cnt));
+        P := NextP;
+      end;
     end;
-    Pos := P - Length(Mono);
-    if Length(Mono) > 0 then
+    Pos := P - N;
+    if N > 0 then
       Last := Mono[High(Mono)];
     Output := OutList.ToArray;
   finally
