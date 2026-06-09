@@ -21,16 +21,18 @@ internal static class WhisperBackendBootstrap
             var gpu = HardwareProbe.GetPrimaryNvidiaGpuName();
             if (HardwareProbe.HasNvidiaGpu())
             {
-                if (HardwareProbe.IsBlackwellNvidiaGpu() && !HardwareProbe.ForceCudaOnBlackwell())
+                if (HardwareProbe.IsBlackwellNvidiaGpu())
                 {
-                    // Early CUDA prebuilts crashed on sm_120 during model init; Vulkan uses the GPU
-                    // safely. Set SMARTINTERVIEW_FORCE_CUDA=1 to prefer CUDA on CUDA 12.8+ runtimes.
+                    // ALWAYS Vulkan on Blackwell, even with SMARTINTERVIEW_FORCE_CUDA: the Whisper
+                    // CUDA prebuilts misbehave on sm_120 (crashes or garbage transcriptions), and
+                    // transcription accuracy is non-negotiable. The force-CUDA toggle only affects
+                    // the LLM backend (NativeBackendBootstrap), where CUDA brings the speed win.
                     RuntimeOptions.RuntimeLibraryOrder =
                     [
                         RuntimeLibrary.Vulkan,
                         RuntimeLibrary.Cpu,
                     ];
-                    log?.Invoke($"Whisper backend: Vulkan GPU on Blackwell ({gpu ?? "NVIDIA"}). Set SMARTINTERVIEW_FORCE_CUDA=1 to try CUDA.");
+                    log?.Invoke($"Whisper backend: Vulkan GPU on Blackwell ({gpu ?? "NVIDIA"}).");
                 }
                 else
                 {

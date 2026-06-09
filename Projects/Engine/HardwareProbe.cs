@@ -31,11 +31,11 @@ namespace SmartInterview
         }
 
         /// <summary>
-        /// Opt-in override (env <c>SMARTINTERVIEW_FORCE_CUDA=1</c>) to prefer CUDA even on
-        /// Blackwell (RTX 50xx). Default off: Blackwell falls back to Vulkan because the early
-        /// CUDA prebuilts crashed on sm_120 during model init. With CUDA 12.8+ runtimes (which
-        /// ship sm_120) CUDA is now usually the faster path on RTX 50-series — set this to test it
-        /// on real Blackwell hardware and, once confirmed stable, it can become the default.
+        /// Opt-in override (env <c>SMARTINTERVIEW_FORCE_CUDA=1</c>, "Force CUDA" menu toggle) to
+        /// prefer CUDA on Blackwell (RTX 50xx) for the <b>LLM backend only</b>. Whisper always
+        /// stays on Vulkan on Blackwell: its CUDA prebuilts misbehave on sm_120 (crashes or
+        /// garbage transcriptions) and transcription accuracy is non-negotiable. Default off:
+        /// the LLM also uses Vulkan unless this is set.
         /// </summary>
         public static bool ForceCudaOnBlackwell()
         {

@@ -84,12 +84,13 @@ namespace SmartInterview
         public void SetPromptHint(string hint)
         {
             hint = (hint ?? string.Empty).Trim();
-            // Whisper's prompt window is ~224 tokens; 600 chars stays well inside it while
-            // leaving room for a profile plus the built-in vocabulary. Cut at a word boundary.
-            if (hint.Length > 600)
+            // Keep the prompt SHORT: long prompts measurably increase hallucinations on
+            // degraded audio (a 40-term list turned a short question into invented text).
+            // 320 chars ≈ one natural sentence with profile terms + a small base vocabulary.
+            if (hint.Length > 320)
             {
-                int cut = hint.LastIndexOf(' ', 600);
-                hint = hint.Substring(0, cut > 0 ? cut : 600).TrimEnd(',', ' ');
+                int cut = hint.LastIndexOf(' ', 320);
+                hint = hint.Substring(0, cut > 0 ? cut : 320).TrimEnd(',', ' ');
             }
             if (hint == _promptHint) return;
             _promptHint = hint;
@@ -153,7 +154,6 @@ namespace SmartInterview
             var finalBuilder = _factory!.CreateBuilder()
                 .WithLanguage(_language)
                 .WithNoContext()
-                .WithBeamSearchSamplingStrategy(b => b.WithBeamSize(5))
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.7f)

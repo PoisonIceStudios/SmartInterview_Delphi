@@ -34,34 +34,42 @@ internal static class Program
         WhisperBackendBootstrap.Configure(LogEngine);
     }
 
-    // Verified experimentally with whisper large-v3 forced to Italian: without a prompt,
-    // "Sai cos'è Unity?" decodes as "Sai cos'è una T?"; with these terms in the prompt the
-    // same audio decodes perfectly, including "React e Angular", "Docker o Kubernetes".
-    // Forcing a non-English language makes Whisper snap English tech terms to similar-sounding
-    // native words; the initial prompt is the supported way to bias decoding back.
-    private const string BaseTechVocabulary =
-        "Unity, Unreal Engine, C#, C++, .NET, Java, JavaScript, TypeScript, Python, PHP, " +
-        "React, Angular, Vue, Node.js, Spring, Django, SQL, NoSQL, MongoDB, PostgreSQL, Redis, " +
-        "Docker, Kubernetes, AWS, Azure, Google Cloud, Git, GitHub, CI/CD, REST, API, GraphQL, " +
-        "microservices, frontend, backend, full stack, DevOps, machine learning, Linux, Agile, Scrum";
+    // Whisper initial-prompt. Measured with large-v3 forced to Italian on degraded audio:
+    //  - no prompt:                "Sai cos'è Unity?"  ->  "Sai cos'è una T?"
+    //  - 40-term raw keyword list: clean audio OK, but degraded short audio collapses into
+    //    invented phrases ("fai cose di un attimo") — a long unnatural prompt is hallucination
+    //    fuel when acoustics are poor;
+    //  - SHORT prompt phrased as a natural sentence: near-perfect on the same degraded audio.
+    // So: one natural sentence in the interview language, profile terms first, a small set of
+    // common tech terms last. Greedy decoding measured equal to beam-5 with this prompt, so
+    // the final pass stays greedy (faster).
+    private const string BaseTechTerms =
+        "Unity, C#, .NET, React, Angular, Node.js, Docker, Kubernetes, AWS, Git, SQL";
 
-    // Build a compact Whisper initial-prompt: interview-profile terms first (most specific),
-    // then the built-in tech vocabulary. Always non-empty, so technical terms are recognised
-    // even when the user never filled in a profile. The Transcriber caps the final length.
-    private static string BuildWhisperHint(InterviewProfile p)
+    private static InterviewProfile _hintProfile = new();
+
+    private static string WhisperHintPreamble() => Llm.LanguageName switch
     {
-        var sb = new System.Text.StringBuilder();
-        void Add(string? s)
-        {
-            if (string.IsNullOrWhiteSpace(s)) return;
-            if (sb.Length > 0) sb.Append(". ");
-            sb.Append(s.Trim());
-        }
-        Add(p.Role);
-        Add(p.TechStack);
-        Add(p.JobDescription);
-        Add(BaseTechVocabulary);
-        return sb.ToString();
+        "Italian" => "Colloquio tecnico di lavoro: parliamo di ",
+        "Spanish" => "Entrevista técnica de trabajo: hablamos de ",
+        "French" => "Entretien d'embauche technique : nous parlons de ",
+        "German" => "Technisches Vorstellungsgespräch: wir sprechen über ",
+        "Russian" => "Техническое собеседование: говорим о ",
+        _ => "Technical job interview: we talk about ",
+    };
+
+    private static void RefreshWhisperHint(InterviewProfile? profile = null)
+    {
+        if (profile != null)
+            _hintProfile = profile;
+        var p = _hintProfile;
+        var sb = new System.Text.StringBuilder(WhisperHintPreamble());
+        if (!string.IsNullOrWhiteSpace(p.Role))
+            sb.Append(p.Role.Trim().TrimEnd('.', ',')).Append(", ");
+        if (!string.IsNullOrWhiteSpace(p.TechStack))
+            sb.Append(p.TechStack.Trim().TrimEnd('.', ',')).Append(", ");
+        sb.Append(BaseTechTerms).Append('.');
+        Transcriber.SetPromptHint(sb.ToString());
     }
 
     private static async Task<int> Main()
@@ -206,7 +214,7 @@ internal static class Program
                 WriteEvent(id, "progress", new { phase = "text_init", progress = -1 });
                 await Llm.LoadAsync(level, CancellationToken.None);
                 Llm.SetProfile(profile);
-                Transcriber.SetPromptHint(BuildWhisperHint(profile));
+                RefreshWhisperHint(profile);
                 Llm.SetAnswerLength(len);
                 WriteEvent(id, "progress", new { phase = "text_init", progress = -1 });
                 await Llm.WarmUpAsync(CancellationToken.None);
@@ -298,6 +306,7 @@ internal static class Program
                 var langName = root.TryGetProperty("lang_name", out var ln) ? ln.GetString() : "English";
                 Transcriber.SetLanguage(lang);
                 Llm.SetLanguage(langName ?? "English");
+                RefreshWhisperHint(); // preamble follows the interview language
                 Reply(id, new { ok = true });
                 break;
             }
@@ -339,7 +348,7 @@ internal static class Program
                     Experience = root.TryGetProperty("experience", out var e) ? e.GetString() ?? "" : "",
                 };
                 Llm.SetProfile(profile);
-                Transcriber.SetPromptHint(BuildWhisperHint(profile));
+                RefreshWhisperHint(profile);
                 Reply(id, new { ok = true });
                 break;
             }
