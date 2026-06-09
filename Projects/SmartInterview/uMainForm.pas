@@ -341,6 +341,7 @@ implementation
 uses
   System.IOUtils,
   uFrmProfile, uFrmAbout, uFrmInterviewSetup, uFrmLicense, uFrmMicSettings,
+  System.Win.Registry,
   uDialogZOrder, uAppStartup, uRichEditFmt, uDebugLog, uLicenseService;
 
 const
@@ -520,6 +521,58 @@ begin
   for I := 1 to ParamCount do
     if SameText(ParamStr(I), '--show') then
       Exit(True);
+end;
+
+// Mirrors HardwareProbe.IsBlackwellNvidiaGpu (C# engine): NVIDIA Blackwell (RTX 50xx) is the
+// only family where CUDA support is incomplete and the engine defaults to Vulkan — the
+// "Force CUDA" menu toggle is only meaningful (and only shown) on these GPUs.
+function MainGpuIsBlackwellNvidia: Boolean;
+const
+  VideoClassKey = '\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}';
+var
+  Reg: TRegistry;
+  Keys: TStringList;
+  I, Dummy: Integer;
+  Provider, Desc: string;
+begin
+  Result := False;
+  Reg := TRegistry.Create(KEY_READ);
+  Keys := TStringList.Create;
+  try
+    try
+      Reg.RootKey := HKEY_LOCAL_MACHINE;
+      if not Reg.OpenKeyReadOnly(VideoClassKey) then
+        Exit;
+      Reg.GetKeyNames(Keys);
+      Reg.CloseKey;
+      for I := 0 to Keys.Count - 1 do
+      begin
+        if not TryStrToInt(Keys[I], Dummy) then
+          Continue; // adapter subkeys are numeric (0000, 0001, ...)
+        if not Reg.OpenKeyReadOnly(VideoClassKey + '\' + Keys[I]) then
+          Continue;
+        try
+          Provider := '';
+          Desc := '';
+          if Reg.ValueExists('ProviderName') then
+            Provider := Reg.ReadString('ProviderName');
+          if Reg.ValueExists('DriverDesc') then
+            Desc := Reg.ReadString('DriverDesc');
+          if ContainsText(Provider, 'NVIDIA') and
+             (ContainsText(Desc, 'RTX 50') or ContainsText(Desc, 'RTX 60') or
+              ContainsText(Desc, 'Blackwell')) then
+            Exit(True);
+        finally
+          Reg.CloseKey;
+        end;
+      end;
+    except
+      // registry not readable: keep the toggle hidden
+    end;
+  finally
+    Keys.Free;
+    Reg.Free;
+  end;
 end;
 
 procedure TMainForm.CreateParams(var Params: TCreateParams);
@@ -713,6 +766,10 @@ begin
   FLicenseTimer.OnTimer := tmrLicenseTimer;
   FLicenseTimer.Enabled := False;
   LicenseMonitorPrimeFromStore(LicenseStoreGetForumUsername, LicenseStoreGet);
+  // Only Blackwell (RTX 50xx) defaults to Vulkan; on every other GPU the toggle is
+  // meaningless, so it stays hidden.
+  miForceCuda.Visible := MainGpuIsBlackwellNvidia;
+  miGpuSep.Visible := miForceCuda.Visible;
   FReady := True;
   FModelBusy := False;
   FModelLock := TCriticalSection.Create;
