@@ -407,14 +407,10 @@ begin
     Exit;
   end;
 
-  if LicenseCodecNormalizeKey(LicenseCodecEncode(Expected,
-    LicenseCodecExpiryToDate(Payload.ExpiryUnixDay), Payload.Lifetime, Payload.Active)) <>
-    LicenseCodecNormalizeKey(LicenseKey) then
-  begin
-    ErrorMsg := 'License key is invalid.';
-    Exit;
-  end;
-
+  // No re-encode comparison here: the HMAC tail verified in TryParsePlaintext already
+  // authenticates username|expiry|flags. Re-encoding used LicenseCodecUnixDayFromLocalDate,
+  // whose result depends on the *client's* timezone — a legitimate key generated in a
+  // UTC+ timezone failed validation on machines west of UTC (expiry day mapped to +1).
   Result := True;
 end;
 

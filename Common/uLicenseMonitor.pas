@@ -19,12 +19,19 @@ type
 
 const
   LicenseRecheckIntervalMs = 6 * 60 * 60 * 1000;
+  // Near expiry the 6h cadence is too coarse (worst case: 6h of use past the expiry day);
+  // within 2 days of expiry checks tighten to hourly so the cutoff lands close to midnight UTC.
+  LicenseRecheckNearExpiryMs = 60 * 60 * 1000;
   LicenseOfflineGraceMs = 72 * 60 * 60 * 1000;
 
 procedure LicenseMonitorReset;
 procedure LicenseMonitorNoteOnlineSuccess(const UtcNow: TDateTime);
 procedure LicenseMonitorPersistAnchor(const Utc: TDateTime; const User, Key: string);
 procedure LicenseMonitorPrimeFromStore(const User, Key: string);
+// Clears the recheck-interval gate so the next LicenseMonitorPeriodicCheck performs a real
+// check. Used while the app is in the offline-blocked state to revalidate as soon as the
+// connection returns, instead of waiting out the normal recheck interval.
+procedure LicenseMonitorForceNextCheck;
 function LicenseMonitorPeriodicCheck(out Message: string): TLicensePeriodicResult;
 
 implementation
@@ -63,28 +70,30 @@ begin
   Result := LowerCase(Result);
 end;
 
-function AnchorHmac(const Utc: TDateTime; const User, Key: string): string;
+// The HMAC binds the exact persisted string (not a re-formatted/rounded copy), so any edit
+// to the stored value — including just the time-of-day fraction — invalidates the anchor.
+function AnchorHmac(const UtcStr, User, Key: string): string;
 var
   Payload, Secret, Digest: TBytes;
-  Canon: string;
 begin
-  Canon := Format('%.0f|%s|%s', [Utc, User, Key]);
-  Payload := TEncoding.UTF8.GetBytes(Canon);
+  Payload := TEncoding.UTF8.GetBytes(UtcStr + '|' + User + '|' + Key);
   Secret := TEncoding.UTF8.GetBytes(AnchorSecret);
   Digest := THashSHA2.GetHMACAsBytes(Payload, Secret, THashSHA2.TSHA2Version.SHA256);
   Result := BytesToHex(Digest);
 end;
 
 procedure LicenseMonitorPersistAnchor(const Utc: TDateTime; const User, Key: string);
+var
+  UtcStr: string;
 begin
-  RegistrySetString(AnchorUtcKey, FloatToStr(Utc, TFormatSettings.Invariant()));
-  RegistrySetString(AnchorHmacKey, AnchorHmac(Utc, User, Key));
+  UtcStr := FloatToStr(Utc, TFormatSettings.Invariant());
+  RegistrySetString(AnchorUtcKey, UtcStr);
+  RegistrySetString(AnchorHmacKey, AnchorHmac(UtcStr, User, Key));
 end;
 
 procedure LicenseMonitorLoadAnchorFromRegistry(const User, Key: string);
 var
   Raw, Expected: string;
-  Utc: TDateTime;
   UtcValue: Double;
 begin
   GAnchorValid := False;
@@ -94,10 +103,9 @@ begin
     Exit;
   if not TryStrToFloat(Raw, UtcValue, TFormatSettings.Invariant()) then
     Exit;
-  Utc := UtcValue;
-  if not SameText(AnchorHmac(Utc, User, Key), Expected) then
+  if not SameText(AnchorHmac(Raw, User, Key), Expected) then
     Exit;
-  GAnchorUtc := Utc;
+  GAnchorUtc := UtcValue;
   GAnchorMonotonicMs := MonotonicMs;
   GAnchorValid := True;
 end;
@@ -105,6 +113,11 @@ end;
 procedure LicenseMonitorReset;
 begin
   GAnchorValid := False;
+  GLastPeriodicCheckMs := 0;
+end;
+
+procedure LicenseMonitorForceNextCheck;
+begin
   GLastPeriodicCheckMs := 0;
 end;
 
@@ -143,28 +156,52 @@ begin
     Err := 'This license has expired. Enter a new license code from the seller.';
 end;
 
+// Effective recheck gate: hourly when within 2 days of expiry (so the cutoff is enforced
+// close to the real expiry moment), 6h otherwise.
+function EffectiveRecheckIntervalMs(const Payload: TLicensePayload): UInt64;
+var
+  Estimated: TDateTime;
+begin
+  Result := LicenseRecheckIntervalMs;
+  if Payload.Lifetime then
+    Exit;
+  Estimated := EstimateUtcNow;
+  if Estimated <= 0 then
+    Exit;
+  if Payload.ExpiryUnixDay <= LicenseCodecUnixDayFromUtc(Estimated) + 2 then
+    Result := LicenseRecheckNearExpiryMs;
+end;
+
 function LicenseMonitorPeriodicCheck(out Message: string): TLicensePeriodicResult;
 var
   Key, User, Err: string;
   Utc: TDateTime;
   NowMono: UInt64;
   Payload: TLicensePayload;
+  HavePayload: Boolean;
 begin
   Message := '';
   NowMono := MonotonicMs;
-  if GLastPeriodicCheckMs <> 0 then
-    if (NowMono - GLastPeriodicCheckMs) < LicenseRecheckIntervalMs then
-      Exit(lprOk);
-  GLastPeriodicCheckMs := NowMono;
 
   Key := RegistryGetString('LicenseKey');
   User := LicenseNormalizeUsername(RegistryGetString('LicenseForumUser'));
   if Trim(Key) = '' then
     Exit(lprNoLicense);
 
+  HavePayload := LicenseCodecTryDecodePayload(Key, Payload, Err);
+
+  if GLastPeriodicCheckMs <> 0 then
+  begin
+    if HavePayload and ((NowMono - GLastPeriodicCheckMs) < EffectiveRecheckIntervalMs(Payload)) then
+      Exit(lprOk);
+    if not HavePayload and ((NowMono - GLastPeriodicCheckMs) < LicenseRecheckIntervalMs) then
+      Exit(lprOk);
+  end;
+  GLastPeriodicCheckMs := NowMono;
+
   // Lifetime licenses never expire → re-validate fully offline. No time server, no
   // offline-grace window, no spurious re-prompt when the network is down.
-  if LicenseCodecTryDecodePayload(Key, Payload, Err) and Payload.Lifetime then
+  if HavePayload and Payload.Lifetime then
   begin
     if LicenseCodecTryValidate(Key, User, Now, Err) then
       Exit(lprOk);

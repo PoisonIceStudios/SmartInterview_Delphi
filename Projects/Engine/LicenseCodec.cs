@@ -128,17 +128,10 @@ internal static class LicenseCodec
             return false;
         }
 
-        var expectedKey = Encode(
-            expected,
-            ExpiryToDate(payload.ExpiryUnixDay),
-            payload.Lifetime,
-            payload.Active);
-        if (!string.Equals(NormalizeKey(expectedKey), NormalizeKey(licenseKey), StringComparison.Ordinal))
-        {
-            error = "License key is invalid.";
-            return false;
-        }
-
+        // No re-encode comparison here: the HMAC tail verified in TryParsePlaintext already
+        // authenticates username|expiry|flags. Re-encoding used UnixDayFromLocalDate, whose
+        // result depends on the *client's* timezone — a legitimate key generated in a UTC+
+        // timezone failed validation on machines west of UTC (expiry day mapped to +1).
         return true;
     }
 

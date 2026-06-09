@@ -28,8 +28,8 @@ La licenza valida è **prerequisito** per avviare il motore AI: senza autenticaz
 
 ## Formato chiave v5 (corrente)
 
-- Prefisso **`SI5-`**, 34 gruppi da 4 caratteri Base32 (~136 caratteri payload+firma)
-- Payload 21 byte: magic `$55`, flags, scadenza (giorno UTC), **data emissione** (giorno UTC), username (max 10)
+- Prefisso **`SI5-`**, gruppi da 4 caratteri Base32 (lunghezza variabile con l'username)
+- Payload variabile: magic `$55` (1), flags (1), scadenza giorno-Unix (2, UInt16 LE), lunghezza username (1), username UTF-8 (max 30)
 - Firma **ECDSA P-256** 64 byte sulla SHA-256 del payload
 - Chiave **privata** solo in `Projects/LicenseManager/Keys/license_signing.priv` (generare dal LicenseManager: menu **Chiavi → Genera chiavi di firma**)
 - Chiave **pubblica** embedded in app ed engine (`uLicensePublicKey.pas`, `LicenseCodecV5.cs`)
@@ -116,9 +116,10 @@ Senza connessione internet la validazione fallisce (messaggio offline) — non �
 
 Con l'app in esecuzione:
 
-- Ogni **30 minuti** viene valutato se serve un re-check (soglia effettiva **6 ore** dall'ultimo controllo).
+- Ogni **30 minuti** viene valutato se serve un re-check (soglia effettiva **6 ore** dall'ultimo controllo; **1 ora** quando mancano ≤2 giorni alla scadenza, così il blocco scatta vicino alla mezzanotte UTC reale).
 - **Online:** verifica completa con ora UTC; se scaduta → stop engine, pulizia registry, form attivazione.
-- **Offline:** stima UTC da ultimo ancoraggio online + tempo monotonic; fino a **72 ore** senza internet l'uso continua; oltre → engine fermato finché non torna la rete.
+- **Offline:** stima UTC da ultimo ancoraggio online + tempo monotonic (`GetTickCount64`, immune alla manomissione dell'orologio di sistema); se la stima supera la scadenza → trattata come scaduta (engine fermato). Fino a **72 ore** senza internet l'uso continua; oltre → **engine fermato** e poll ogni minuto finché non torna la rete (riavvio automatico del motore alla riconnessione con licenza valida).
+- **Riavvio app offline (chiavi a scadenza):** la validazione all'avvio richiede l'ora online → senza internet l'app non parte. Il grace di 72h vale solo a sessione aperta; non è possibile aggirare la scadenza riavviando offline.
 
 Non serve essere online ogni 24 ore se la licenza non è scaduta: serve un check online periodico per aggiornare l'ancoraggio e rilevare la scadenza reale.
 

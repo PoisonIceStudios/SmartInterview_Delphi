@@ -140,9 +140,14 @@ namespace SmartInterview
             // EntropyThreshold/LogProbThreshold mark a low-quality decode (noise-driven, high
             // entropy / low confidence). They feed the same no-speech logic we then enforce in
             // IsHallucination, and cost nothing on clean speech.
+            // Beam search (beam 5, like OpenAI's reference settings) explores alternative
+            // decodings and picks the most probable one — a significant word-accuracy win over
+            // greedy on accented speech and technical terms, for a modest decode-time cost on
+            // the final pass only. Live preview stays greedy for latency.
             var finalBuilder = _factory!.CreateBuilder()
                 .WithLanguage(_language)
                 .WithNoContext()
+                .WithBeamSearchSamplingStrategy(b => b.WithBeamSize(5))
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.7f)
@@ -298,8 +303,10 @@ namespace SmartInterview
                 CancelInFlight();
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
-            _inflightCts = linked;
             await _gate.WaitAsync(linked.Token);
+            // Publish our CTS only once we own the gate: before that, CancelInFlight must hit
+            // the *running* transcription (so it frees the gate for us), not this waiting one.
+            _inflightCts = linked;
             try
             {
                 if (_disposed) return;

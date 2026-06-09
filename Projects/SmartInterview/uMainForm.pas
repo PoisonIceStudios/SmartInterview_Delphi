@@ -231,6 +231,7 @@ type
     FEnginePingBusy: Boolean;
     FLicenseTimer: TTimer;
     FLicenseCheckBusy: Boolean;
+    FLicenseOfflineBlocked: Boolean;
     FProgressLastUpdate: Int64;
     FStreamBuf: string;
     FStreamAnswer: string;
@@ -2711,9 +2712,27 @@ procedure TMainForm.HandleLicensePeriodicResult(const Res: TLicensePeriodicResul
 begin
   case Res of
     lprOk, lprOfflineOk:
-      ;
+      begin
+        // Recovered from the offline-blocked state (internet is back and the license is
+        // still valid): restart the engine and resume normal cadence.
+        if FLicenseOfflineBlocked then
+        begin
+          FLicenseOfflineBlocked := False;
+          FLicenseTimer.Interval := 30 * 60 * 1000;
+          SetStatus('License verified - restarting engine...');
+          try
+            RestartEngineAfterRelicense;
+            SetStatus('');
+          except
+            on E: Exception do
+              SetStatus('Engine restart failed: ' + E.Message);
+          end;
+        end;
+      end;
     lprExpired, lprInvalid, lprNoLicense:
       begin
+        FLicenseOfflineBlocked := False;
+        FLicenseTimer.Interval := 30 * 60 * 1000;
         FEngine.Stop;
         FReady := False;
         FrmLicense.PrepareShow;
@@ -2742,8 +2761,22 @@ begin
       end;
     lprOfflineBlocked:
       begin
+        // Offline grace exceeded (or no trusted time anchor): the AI engine must actually
+        // stop, not just show a message — otherwise the documented 72h offline cap is not
+        // enforced. While blocked the timer polls every minute and forces a real check, so
+        // the engine restarts within ~1 minute of the connection returning.
+        if not FLicenseOfflineBlocked then
+        begin
+          FLicenseOfflineBlocked := True;
+          FEngine.CancelGeneration;
+          FEngine.Stop;
+          FReady := False;
+          FLicenseTimer.Interval := 60 * 1000;
+        end;
         if Msg <> '' then
-          SetStatus(Msg);
+          SetStatus(Msg)
+        else
+          SetStatus('Connect to the internet to verify your license.');
       end;
   end;
 end;
@@ -2753,10 +2786,14 @@ var
   Msg: string;
   Res: TLicensePeriodicResult;
 begin
-  if FShuttingDown or not FReady or FLicenseCheckBusy then
+  if FShuttingDown or FLicenseCheckBusy then
+    Exit;
+  if not (FReady or FLicenseOfflineBlocked) then
     Exit;
   FLicenseCheckBusy := True;
   try
+    if FLicenseOfflineBlocked then
+      LicenseMonitorForceNextCheck;
     Res := LicensePeriodicRevalidate(Msg);
     HandleLicensePeriodicResult(Res, Msg);
   finally
