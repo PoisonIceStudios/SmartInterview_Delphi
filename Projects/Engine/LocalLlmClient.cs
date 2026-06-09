@@ -108,11 +108,30 @@ namespace SmartInterview
         /// Sliding-window trim: drop the oldest user/assistant exchanges (never the system prompt
         /// nor the most recent user turn) until the prompt fits, leaving room for the answer.
         /// </summary>
+        // Speed cap on how many recent messages are re-prefilled each turn. StatelessExecutor
+        // re-evaluates the whole prompt on every answer, so without a cap the prefill cost keeps
+        // growing as the interview goes on and late answers get noticeably slower. Keeping only the
+        // most recent exchanges bounds prefill latency (the user's top priority) while still
+        // covering immediate follow-ups like "can you elaborate on that?".
+        private const int MaxRecentMessages = 12; // ~6 Q&A pairs (excludes the system prompt)
+
         private void TrimHistoryToBudget(int reserveForAnswer)
         {
             if (_weights == null) return;
             int budget = _contextSize - reserveForAnswer - 256; // safety margin
             if (budget < 512) budget = 512;
+
+            // Hard recency cap first: drop the oldest exchanges (never the system prompt nor the
+            // latest user turn) so prefill stays fast regardless of interview length.
+            {
+                int start = (_history.Count > 0 && _history[0].Role == "system") ? 1 : 0;
+                while (_history.Count - start > MaxRecentMessages)
+                {
+                    _history.RemoveAt(start);
+                    if (start < _history.Count && _history[start].Role == "assistant")
+                        _history.RemoveAt(start);
+                }
+            }
 
             int guard = 0;
             while (CountTokens(BuildChatMlPrompt()) > budget && guard++ < 512)

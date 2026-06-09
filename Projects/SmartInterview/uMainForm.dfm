@@ -51,13 +51,13 @@ object MainForm: TMainForm
     object pnlTitleButtons: TPanel
       Left = 89
       Top = 0
-      Width = 340
+      Width = 341
       Height = 40
       Align = alClient
       BevelOuter = bvNone
       TabOrder = 0
       object btnPin: TSpeedButton
-        Left = 304
+        Left = 305
         Top = 0
         Width = 36
         Height = 40
@@ -75,7 +75,7 @@ object MainForm: TMainForm
         ExplicitLeft = 216
       end
       object btnMenu: TSpeedButton
-        Left = 268
+        Left = 269
         Top = 0
         Width = 36
         Height = 40
@@ -93,7 +93,7 @@ object MainForm: TMainForm
         ExplicitLeft = 180
       end
       object btnOpDn: TSpeedButton
-        Left = 232
+        Left = 233
         Top = 0
         Width = 36
         Height = 40
@@ -111,7 +111,7 @@ object MainForm: TMainForm
         ExplicitLeft = 144
       end
       object btnOpUp: TSpeedButton
-        Left = 196
+        Left = 197
         Top = 0
         Width = 36
         Height = 40
@@ -129,7 +129,7 @@ object MainForm: TMainForm
         ExplicitLeft = 108
       end
       object btnNew: TSpeedButton
-        Left = 144
+        Left = 145
         Top = 0
         Width = 52
         Height = 40
@@ -147,7 +147,7 @@ object MainForm: TMainForm
         ExplicitLeft = 72
       end
       object btnAuto: TSpeedButton
-        Left = 108
+        Left = 109
         Top = 0
         Width = 36
         Height = 40
@@ -165,7 +165,7 @@ object MainForm: TMainForm
         ExplicitLeft = 36
       end
       object btnSetup: TSpeedButton
-        Left = 72
+        Left = 73
         Top = 0
         Width = 36
         Height = 40
@@ -191,13 +191,16 @@ object MainForm: TMainForm
     Height = 412
     Align = alClient
     BevelOuter = bvNone
-    Color = clBtnFace
+    Ctl3D = True
     Padding.Left = 16
     Padding.Top = 8
     Padding.Right = 16
     Padding.Bottom = 8
     ParentBackground = False
+    ParentCtl3D = False
     TabOrder = 1
+    ExplicitLeft = 17
+    ExplicitTop = 46
     object lblHeard: TLabel
       Left = 16
       Top = 8
@@ -211,18 +214,7 @@ object MainForm: TMainForm
       Font.Name = 'Segoe UI Semibold'
       Font.Style = [fsBold]
       ParentFont = False
-    end
-    object txtTranscript: TMemo
-      Left = 16
-      Top = 23
-      Width = 398
-      Height = 72
-      Align = alTop
-      Color = clWindow
-      ParentColor = False
-      ReadOnly = True
-      ScrollBars = ssNone
-      TabOrder = 0
+      ExplicitWidth = 51
     end
     object lblAnswer: TLabel
       Left = 16
@@ -237,6 +229,17 @@ object MainForm: TMainForm
       Font.Name = 'Segoe UI Semibold'
       Font.Style = [fsBold]
       ParentFont = False
+      ExplicitLeft = 136
+      ExplicitTop = 143
+    end
+    object txtTranscript: TMemo
+      Left = 16
+      Top = 23
+      Width = 398
+      Height = 72
+      Align = alTop
+      ReadOnly = True
+      TabOrder = 0
     end
     object rtbResponse: TRichEdit
       Left = 16
@@ -244,16 +247,13 @@ object MainForm: TMainForm
       Width = 398
       Height = 294
       Align = alClient
-      Color = clWindow
       Font.Charset = ANSI_CHARSET
       Font.Color = clWindowText
       Font.Height = -12
       Font.Name = 'Segoe UI'
       Font.Style = []
-      ParentColor = False
       ParentFont = False
       ReadOnly = True
-      ScrollBars = ssNone
       TabOrder = 1
     end
   end
@@ -264,19 +264,18 @@ object MainForm: TMainForm
     Height = 28
     Align = alBottom
     BevelOuter = bvNone
-    Color = clBtnFace
     ParentBackground = False
     TabOrder = 2
     object lblStatusBar: TLabel
-      Left = 16
+      Left = 0
       Top = 0
-      Width = 398
+      Width = 430
       Height = 28
       Align = alClient
-      Alignment = taLeftJustify
       Caption = 'Ready'
       Layout = tlCenter
-      ExplicitWidth = 34
+      ExplicitLeft = 16
+      ExplicitWidth = 32
       ExplicitHeight = 15
     end
   end

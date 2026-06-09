@@ -30,6 +30,21 @@ namespace SmartInterview
                    || name.Contains("Blackwell", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Opt-in override (env <c>SMARTINTERVIEW_FORCE_CUDA=1</c>) to prefer CUDA even on
+        /// Blackwell (RTX 50xx). Default off: Blackwell falls back to Vulkan because the early
+        /// CUDA prebuilts crashed on sm_120 during model init. With CUDA 12.8+ runtimes (which
+        /// ship sm_120) CUDA is now usually the faster path on RTX 50-series — set this to test it
+        /// on real Blackwell hardware and, once confirmed stable, it can become the default.
+        /// </summary>
+        public static bool ForceCudaOnBlackwell()
+        {
+            var v = Environment.GetEnvironmentVariable("SMARTINTERVIEW_FORCE_CUDA");
+            return string.Equals(v, "1", StringComparison.Ordinal)
+                || string.Equals(v, "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(v, "yes", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static string? GetPrimaryNvidiaGpuName()
         {
             string? best = null;

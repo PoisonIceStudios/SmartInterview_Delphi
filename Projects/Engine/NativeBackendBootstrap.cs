@@ -39,14 +39,16 @@ internal static class NativeBackendBootstrap
 
             if (HardwareProbe.HasNvidiaGpu())
             {
-                if (HardwareProbe.IsBlackwellNvidiaGpu())
+                if (HardwareProbe.IsBlackwellNvidiaGpu() && !HardwareProbe.ForceCudaOnBlackwell())
                 {
-                    // Blackwell: CUDA12 prebuilts lack sm_120; Vulkan uses GPU reliably on RTX 50.
+                    // Blackwell: early CUDA12 prebuilts lacked sm_120; Vulkan uses GPU reliably on
+                    // RTX 50. Set SMARTINTERVIEW_FORCE_CUDA=1 to prefer CUDA (faster) on CUDA 12.8+.
                     cfg.WithCuda(false).WithVulkan(true);
-                    log?.Invoke($"Native backend: Vulkan GPU on Blackwell ({HardwareProbe.GetPrimaryNvidiaGpuName()}).");
+                    log?.Invoke($"Native backend: Vulkan GPU on Blackwell ({HardwareProbe.GetPrimaryNvidiaGpuName()}). Set SMARTINTERVIEW_FORCE_CUDA=1 to try CUDA.");
                 }
                 else
                 {
+                    // CUDA preferred, Vulkan fallback (WithAutoFallback handles a failed CUDA load).
                     cfg.WithCuda(true).WithVulkan(true);
                     log?.Invoke($"Native backend: CUDA preferred on {HardwareProbe.GetPrimaryNvidiaGpuName()} (Vulkan fallback).");
                 }

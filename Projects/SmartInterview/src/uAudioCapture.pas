@@ -53,7 +53,7 @@ const
   MaxCaptureSamples = 16000 * 60 * 10;
   SpeechFrameSamples = 320;         // 20 ms @ 16 kHz
   SpeechRmsThreshold = 0.030;       // loopback / auto mode gate
-  DefaultMicSpeechThreshold = 0.500; // mic noise gate (slider default 500/1000)
+  DefaultMicSpeechThreshold = 0.060; // mic noise gate (RMS 0..1): blocks room/PC noise, passes speech
   SpeechMinVoicedFrames = 6;        // need ~120 ms of real voice to count as speech
   SpeechEdgePadSamples = 1280;      // keep 80 ms around the speech so words aren't clipped
 

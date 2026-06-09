@@ -253,6 +253,7 @@ type
     procedure RunListenFinalize(const ASnap: TArray<Single>; const APreview: string; ASession: Integer);
     function NormalizeQuestionKey(const Text: string): string;
     function IsDuplicateAutoQuestion(const Text: string): Boolean;
+    procedure RecordAutoQuestionAnswered(const Text: string);
     procedure HandleStreamToken(Sender: TObject; const Token: string);
     function IsWaveRecording: Boolean;
     function IsMicActive: Boolean;
@@ -361,7 +362,12 @@ const
   HTCAPTION = 2;
   LWA_ALPHA = $2;
   MicMonitorWarmupMs = 2000;
-  MicDefaultThreshold = 0.500;  // slider default 500/1000 — filters mic noise that triggers Whisper hallucinations
+  // Default mic noise gate (RMS, 0..1 scale). Normal speech sits around 0.05–0.15 RMS while a
+  // quiet room/PC noise floor is ~0.01–0.02, so 0.06 blocks the noise that makes Whisper write
+  // "Grazie" yet still lets real speech through. The old 0.500 default was far above speech level
+  // and effectively gated out the voice (manual mic capture reported "No speech detected").
+  // Combined with AudioHasSpeech requiring 6 consecutive voiced frames, transient spikes never pass.
+  MicDefaultThreshold = 0.060;
   MicMeterMaxStep = 0.06;       // ignore single-buffer spikes on the level meter
   MicActiveHoldMs = 250;
 
@@ -480,17 +486,26 @@ end;
 function TMainForm.IsDuplicateAutoQuestion(const Text: string): Boolean;
 var
   Key: string;
-  NowTick: Int64;
 begin
+  // Pure check (no mutation): a segment counts as duplicate only if we actually *answered*
+  // the same text within the window. The key is recorded in RecordAutoQuestionAnswered after
+  // a successful answer, so a segment that was detected but never answered (rejected by a
+  // later gate, or the model returned [[SKIP]]) does not block a legitimate repeat of the
+  // question — e.g. when the interviewer re-asks because the candidate stayed silent.
   Key := NormalizeQuestionKey(Text);
   if Length(Key) < 8 then Exit(False);
-  NowTick := Int64(GetTickCount64);
-  if (Key = FLastAutoQuestionKey) and
-     (NowTick - FLastAutoQuestionTicks < DuplicateQuestionMs) then
-    Exit(True);
+  Result := (Key = FLastAutoQuestionKey) and
+            (Int64(GetTickCount64) - FLastAutoQuestionTicks < DuplicateQuestionMs);
+end;
+
+procedure TMainForm.RecordAutoQuestionAnswered(const Text: string);
+var
+  Key: string;
+begin
+  Key := NormalizeQuestionKey(Text);
+  if Length(Key) < 8 then Exit;
   FLastAutoQuestionKey := Key;
-  FLastAutoQuestionTicks := NowTick;
-  Result := False;
+  FLastAutoQuestionTicks := Int64(GetTickCount64);
 end;
 
 function ParamHasShowFlag: Boolean;
@@ -1747,6 +1762,7 @@ begin
         end);
         if Answered then
         begin
+          RecordAutoQuestionAnswered(Text);
           SetStatus('');
           UiInvoke(procedure
           begin
@@ -1810,13 +1826,17 @@ begin
   Normalized := CleanTranscriptText(Text).ToLower;
   if Normalized.IsEmpty then
     Exit(True);
+  // Thank-you / outro openers across every supported language (a single "grazie ..." style
+  // alternation covers all the per-language variants without skewing the list to one locale).
   if TRegEx.IsMatch(Normalized,
-    '^(grazie|grazie\.|grazie della visione|grazie per la visione|grazie a tutti|grazie a voi|' +
-    'thanks|thank you|thank you\.|thanks for watching|merci|gracias|danke)(\s+.*)?\.?$',
+    '^(grazie|thanks|thank you|merci|gracias|danke|obrigad[oa]|спасибо|谢谢|ありがとう)' +
+    '(\s+.*)?\.?$',
     [roIgnoreCase]) then
     Exit(True);
+  // Subtitle / credit markers in several languages.
   if TRegEx.IsMatch(Normalized,
-    '^(sottotitoli|subtitles|subtitle|translated|traduzione|revisione|copyright|\.\.\.)',
+    '^(sottotitoli|subtitles?|untertitel|sous-titres|subt[ií]tulos|legendas|субтитры|字幕|' +
+    'translated|traduzione|revisione|copyright|\.\.\.)',
     [roIgnoreCase]) then
     Exit(True);
   Result := False;

@@ -120,12 +120,17 @@ namespace SmartInterview
             // hallucinates common phrases ("Grazie", "Grazie a tutti", subtitle credits).
             // Greedy decoding (temp 0) with no fallback keeps clean audio accurate and stops
             // those hallucinations at the source.
+            // EntropyThreshold/LogProbThreshold mark a low-quality decode (noise-driven, high
+            // entropy / low confidence). They feed the same no-speech logic we then enforce in
+            // IsHallucination, and cost nothing on clean speech.
             _processor = _factory!.CreateBuilder()
                 .WithLanguage(_language)
                 .WithNoContext()
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.7f)
+                .WithEntropyThreshold(2.4f)
+                .WithLogProbThreshold(-1.0f)
                 .Build();
 
             // Live pass: shorter windows, faster first callback, stricter silence gate.
@@ -135,6 +140,8 @@ namespace SmartInterview
                 .WithTemperature(0.0f)
                 .WithTemperatureInc(0.0f)
                 .WithNoSpeechThreshold(0.85f)
+                .WithEntropyThreshold(2.4f)
+                .WithLogProbThreshold(-1.0f)
                 .Build();
 
             _needsRebuild = false;
@@ -200,20 +207,34 @@ namespace SmartInterview
         }
 
         // Phrases Whisper invents on silence / background noise (subtitle credits, thank-you
-        // outros). They are never real interview content, so a whole segment that reduces to
-        // one of these is dropped. Compared after stripping punctuation and lowercasing.
+        // outros). They are never real interview content, so a short segment that reduces to
+        // one of these (at low confidence) is dropped. Compared after stripping punctuation and
+        // lowercasing. The list is balanced across every supported language so coverage does not
+        // skew to one locale.
         private static readonly HashSet<string> HallucinationPhrases = new(StringComparer.Ordinal)
         {
-            "grazie", "grazie a tutti", "grazie a voi", "grazie mille",
-            "grazie della visione", "grazie per la visione", "grazie per l attenzione",
-            "grazie per aver guardato", "grazie e arrivederci", "grazie a tutti per la visione",
-            "sottotitoli", "sottotitoli e revisione", "sottotitoli a cura di",
-            "sottotitoli creati dalla comunita amara org", "sottotitoli e revisione a cura di qtss",
-            "buona visione", "alla prossima", "ci vediamo alla prossima", "ci vediamo nel prossimo video",
-            "iscrivetevi al canale", "metti mi piace e iscriviti",
-            "thank you", "thanks for watching", "thank you for watching",
-            "please subscribe", "subscribe to my channel", "like and subscribe",
-            "you", "bye", "bye bye", "okay", "ok",
+            // English
+            "you", "thank you", "thanks", "thanks for watching", "thank you for watching",
+            "please subscribe", "subscribe to my channel", "like and subscribe", "see you next time",
+            // Italian
+            "grazie", "grazie a tutti", "grazie a voi", "grazie mille", "grazie della visione",
+            "grazie per la visione", "grazie per aver guardato", "sottotitoli", "buona visione",
+            "iscrivetevi al canale",
+            // German
+            "danke", "vielen dank", "untertitel", "untertitel von stephanie geiges",
+            "bis zum nachsten mal", "tschuss",
+            // French
+            "merci", "merci d avoir regarde", "sous titres", "a la prochaine", "abonnez vous",
+            // Spanish
+            "gracias", "gracias por ver", "subtitulos", "suscribete", "hasta la proxima",
+            // Portuguese
+            "obrigado", "obrigada", "obrigado por assistir", "legendas", "se inscreva",
+            // Russian
+            "спасибо", "спасибо за просмотр", "подписывайтесь", "продолжение следует",
+            // Chinese / Japanese
+            "谢谢", "请订阅", "字幕", "ご視聴ありがとうございました",
+            // generic
+            "bye", "bye bye", "ok", "okay",
         };
 
         private static bool IsHallucination(SegmentData seg)
@@ -226,20 +247,63 @@ namespace SmartInterview
             if (norm.Length == 0)
                 return true;
 
-            // A whole short segment that is exactly a known filler/credit phrase, decoded with
-            // low confidence, is almost certainly invented over noise.
-            if (HallucinationPhrases.Contains(norm) && seg.Probability < -0.55f)
+            int words = WordCount(norm);
+
+            // Language-independent guard: a SHORT segment decoded with very low average token
+            // confidence (avg log-prob) over near-silence is almost always invented — real
+            // speech, even quiet, decodes with markedly higher confidence than noise-driven text.
+            // Restricted to short segments so a genuine long answer with a couple of uncertain
+            // words is never dropped.
+            if (words <= 6 && seg.Probability < -0.85f)
+                return true;
+
+            // Known filler/credit phrase in any language, at low confidence. Exact match or the
+            // segment starting with the phrase (e.g. "grazie a tutti per la visione di oggi").
+            if (seg.Probability < -0.50f && MatchesHallucinationPhrase(norm))
                 return true;
 
             return false;
         }
 
+        private static bool MatchesHallucinationPhrase(string norm)
+        {
+            if (HallucinationPhrases.Contains(norm))
+                return true;
+            foreach (var phrase in HallucinationPhrases)
+            {
+                // startsWith + word boundary so "thanks" does not swallow "thanks to caching…".
+                if (norm.Length > phrase.Length &&
+                    norm.StartsWith(phrase, StringComparison.Ordinal) &&
+                    norm[phrase.Length] == ' ')
+                    return true;
+            }
+            return false;
+        }
+
+        private static int WordCount(string norm)
+        {
+            if (norm.Length == 0) return 0;
+            int n = 1;
+            foreach (var ch in norm)
+                if (ch == ' ') n++;
+            return n;
+        }
+
         private static string NormalizeForMatch(string text)
         {
-            var sb = new System.Text.StringBuilder(text.Length);
+            // Fold diacritics so "subtítulos"/"subtitulos" and "à la"/"a la" match regardless of
+            // how Whisper renders accents. FormD splits accented letters into base + combining
+            // mark; we drop the marks. Cyrillic/CJK have no decomposable marks here, so they pass
+            // through unchanged.
+            string lowered = text.Trim().ToLowerInvariant()
+                .Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder(lowered.Length);
             char prevSpace = ' ';
-            foreach (var ch in text.Trim().ToLowerInvariant())
+            foreach (var ch in lowered)
             {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch)
+                    == System.Globalization.UnicodeCategory.NonSpacingMark)
+                    continue;
                 if (char.IsLetterOrDigit(ch))
                 {
                     sb.Append(ch);
