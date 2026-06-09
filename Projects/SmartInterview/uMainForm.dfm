@@ -420,6 +420,13 @@ object MainForm: TMainForm
           end
         end
       end
+      object miGpuSep: TMenuItem
+        Caption = '-'
+      end
+      object miForceCuda: TMenuItem
+        Caption = 'Force CUDA on RTX 50xx (restarts engine)'
+        OnClick = miForceCudaClick
+      end
     end
     object miListening: TMenuItem
       Caption = 'Listening'

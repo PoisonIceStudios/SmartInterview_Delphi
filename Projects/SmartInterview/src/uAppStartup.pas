@@ -177,6 +177,14 @@ begin
     LangCode := 'en';
   LangName := LangNameForCode(LangCode);
 
+  // Apply the persisted GPU override before the engine process is created: the child
+  // inherits this variable (HardwareProbe.ForceCudaOnBlackwell). Forces CUDA instead of
+  // Vulkan on RTX 50xx; toggled from the context menu (Models -> Force CUDA).
+  if RegistryGetInt('ForceCuda', 0) <> 0 then
+    SetEnvironmentVariable('SMARTINTERVIEW_FORCE_CUDA', '1')
+  else
+    SetEnvironmentVariable('SMARTINTERVIEW_FORCE_CUDA', nil);
+
   Engine := TPipeEngine.Create;
   Bridge := TStartupProgressBridge.Create(OnStatus, Level, WhisperLevel);
   try

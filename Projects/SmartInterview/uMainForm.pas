@@ -67,6 +67,8 @@ type
     miRemoveFast: TMenuItem;
     miRemoveBalanced: TMenuItem;
     miRemoveMax: TMenuItem;
+    miGpuSep: TMenuItem;
+    miForceCuda: TMenuItem;
     miListening: TMenuItem;
     miListenKey: TMenuItem;
     miKeyCtrl: TMenuItem;
@@ -156,6 +158,7 @@ type
     procedure miTransClick(Sender: TObject);
     procedure miListenKeyClick(Sender: TObject);
     procedure miAutoCfgClick(Sender: TObject);
+    procedure miForceCudaClick(Sender: TObject);
     procedure miMicCfgClick(Sender: TObject);
     procedure miUseMicClick(Sender: TObject);
     procedure miMicClick(Sender: TObject);
@@ -1537,6 +1540,7 @@ begin
   miIntelFast.Checked := FIntelligence = riFast;
   miIntelBalanced.Checked := FIntelligence = riBalanced;
   miIntelMax.Checked := FIntelligence = riMax;
+  miForceCuda.Checked := RegistryGetInt('ForceCuda', 0) <> 0;
   miTransFast.Checked := FTranscription = tiFast;
   miTransBalanced.Checked := FTranscription = tiBalanced;
   miTransMax.Checked := FTranscription = tiMax;
@@ -2679,6 +2683,61 @@ begin
   if WindowState = wsMinimized then WindowState := wsNormal;
   Application.Restore;
   BringToFront;
+end;
+
+procedure TMainForm.miForceCudaClick(Sender: TObject);
+var
+  Enable: Boolean;
+begin
+  if FModelBusy or not FReady then
+  begin
+    SetStatus('Wait for the current operation to finish, then try again.');
+    Exit;
+  end;
+  Enable := not miForceCuda.Checked;
+  if Enable and
+     (MessageDlg('Force the CUDA backend on RTX 50xx (Blackwell) GPUs?' + sLineBreak + sLineBreak +
+       'Faster than Vulkan when it works, but early CUDA builds crashed on these cards. ' +
+       'If the engine fails to restart, the option is turned off again automatically.' + sLineBreak +
+       sLineBreak + 'The AI engine will restart now (models are reloaded).',
+       mtConfirmation, [mbYes, mbNo], 0) <> mrYes) then
+    Exit;
+
+  miForceCuda.Checked := Enable;
+  RegistrySetInt('ForceCuda', Ord(Enable));
+  // The engine child process inherits this variable (HardwareProbe.ForceCudaOnBlackwell).
+  if Enable then
+    SetEnvironmentVariable('SMARTINTERVIEW_FORCE_CUDA', '1')
+  else
+    SetEnvironmentVariable('SMARTINTERVIEW_FORCE_CUDA', nil);
+
+  try
+    RestartEngineAfterRelicense;
+    if Enable then
+      SetStatus('Engine restarted with CUDA forced. Check answer speed now.')
+    else
+      SetStatus('Engine restarted with the default GPU backend.');
+  except
+    on E: Exception do
+    begin
+      // CUDA crashed or the engine would not come back: revert to the safe default
+      // and restart once more so the app stays usable.
+      miForceCuda.Checked := False;
+      RegistrySetInt('ForceCuda', 0);
+      SetEnvironmentVariable('SMARTINTERVIEW_FORCE_CUDA', nil);
+      SetStatus('CUDA backend failed: ' + E.Message);
+      if Enable then
+      begin
+        try
+          RestartEngineAfterRelicense;
+          SetStatus('CUDA failed - reverted to the default backend.');
+        except
+          on E2: Exception do
+            SetStatus('Engine restart failed: ' + E2.Message + ' Restart the app.');
+        end;
+      end;
+    end;
+  end;
 end;
 
 procedure TMainForm.RestartEngineAfterRelicense;
