@@ -34,9 +34,20 @@ internal static class Program
         WhisperBackendBootstrap.Configure(LogEngine);
     }
 
-    // Build a compact Whisper initial-prompt from the interview profile so domain terms (product
-    // names, frameworks, English jargon like "Unity"/"React"/".NET") are recognised instead of
-    // being misheard as ordinary words. The Transcriber caps the final length.
+    // Verified experimentally with whisper large-v3 forced to Italian: without a prompt,
+    // "Sai cos'è Unity?" decodes as "Sai cos'è una T?"; with these terms in the prompt the
+    // same audio decodes perfectly, including "React e Angular", "Docker o Kubernetes".
+    // Forcing a non-English language makes Whisper snap English tech terms to similar-sounding
+    // native words; the initial prompt is the supported way to bias decoding back.
+    private const string BaseTechVocabulary =
+        "Unity, Unreal Engine, C#, C++, .NET, Java, JavaScript, TypeScript, Python, PHP, " +
+        "React, Angular, Vue, Node.js, Spring, Django, SQL, NoSQL, MongoDB, PostgreSQL, Redis, " +
+        "Docker, Kubernetes, AWS, Azure, Google Cloud, Git, GitHub, CI/CD, REST, API, GraphQL, " +
+        "microservices, frontend, backend, full stack, DevOps, machine learning, Linux, Agile, Scrum";
+
+    // Build a compact Whisper initial-prompt: interview-profile terms first (most specific),
+    // then the built-in tech vocabulary. Always non-empty, so technical terms are recognised
+    // even when the user never filled in a profile. The Transcriber caps the final length.
     private static string BuildWhisperHint(InterviewProfile p)
     {
         var sb = new System.Text.StringBuilder();
@@ -49,6 +60,7 @@ internal static class Program
         Add(p.Role);
         Add(p.TechStack);
         Add(p.JobDescription);
+        Add(BaseTechVocabulary);
         return sb.ToString();
     }
 

@@ -84,7 +84,13 @@ namespace SmartInterview
         public void SetPromptHint(string hint)
         {
             hint = (hint ?? string.Empty).Trim();
-            if (hint.Length > 220) hint = hint.Substring(0, 220);
+            // Whisper's prompt window is ~224 tokens; 600 chars stays well inside it while
+            // leaving room for a profile plus the built-in vocabulary. Cut at a word boundary.
+            if (hint.Length > 600)
+            {
+                int cut = hint.LastIndexOf(' ', 600);
+                hint = hint.Substring(0, cut > 0 ? cut : 600).TrimEnd(',', ' ');
+            }
             if (hint == _promptHint) return;
             _promptHint = hint;
             _needsRebuild = true;
