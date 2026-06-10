@@ -115,10 +115,17 @@ namespace SmartInterview
         /// Decodes the whole buffer and emits the text as a single part (offline transducer
         /// decoding is fast enough that incremental segments are unnecessary).
         /// </summary>
+        // Below ~1.5 s the model has too little context: Parakeet's automatic language detection
+        // misfires and emits invented English words ("Psycho", "Yeah") on a half-spoken Italian
+        // question. Measured: 1.0 s -> garbage, 1.5 s -> correct. The live preview sends growing
+        // cumulative audio, so it simply shows nothing until enough has been spoken, then the
+        // correct text appears. Real interview questions are always longer than this.
+        private const int MinReliableSamples = 24000; // 1.5 s @ 16 kHz
+
         public async Task TranscribeStreamAsync(float[] samples, Action<string> onPart, CancellationToken ct,
             bool cancelPrevious = false, bool liveMode = false)
         {
-            if (samples.Length < 1600) return;
+            if (samples.Length < MinReliableSamples) return;
             if (_disposed) return;
 
             Transcriber.PreprocessForAsr(samples);
