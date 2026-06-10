@@ -367,12 +367,11 @@ const
   HTCAPTION = 2;
   LWA_ALPHA = $2;
   MicMonitorWarmupMs = 2000;
-  // Default mic noise gate (RMS, 0..1 scale). Normal speech sits around 0.05–0.15 RMS while a
-  // quiet room/PC noise floor is ~0.01–0.02, so 0.06 blocks the noise that makes Whisper write
-  // "Grazie" yet still lets real speech through. The old 0.500 default was far above speech level
-  // and effectively gated out the voice (manual mic capture reported "No speech detected").
-  // Combined with AudioHasSpeech requiring 6 consecutive voiced frames, transient spikes never pass.
-  MicDefaultThreshold = 0.060;
+  // Default mic gate (RMS, 0..1). Kept LOW on purpose so a quiet/distant voice is never gated out
+  // ("too low to hear"): the engine normalizes the level (AGC) and filters noise/silence itself.
+  // This is only the slider's default; the user raises it from Microphone settings if the room is
+  // noisy. (Was 0.500 — gated out the voice; then 0.060 — still too high for a far mic.)
+  MicDefaultThreshold = 0.012;
   MicMeterMaxStep = 0.06;       // ignore single-buffer spikes on the level meter
   MicActiveHoldMs = 250;
 

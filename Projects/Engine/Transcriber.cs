@@ -236,11 +236,15 @@ namespace SmartInterview
                 if (ax > peak) peak = ax;
                 sumSq += (double)x[i] * x[i];
             }
-            if (peak < 1e-4f) return;                    // essentially silent
+            // Below ~ -50 dBFS there is no real speech to lift, only the noise/dither floor —
+            // amplifying THAT to speech level is what makes Whisper hallucinate on silence. So we
+            // lift a genuinely quiet mic (a distant/low-gain voice still peaks well above this)
+            // but leave near-silence alone for the no-speech filter to drop.
+            if (peak < 0.003f) return;
             float rms = (float)Math.Sqrt(sumSq / n);
             float gain = rms > 1e-6f ? 0.12f / rms : 1f; // target ~ -18 dBFS speech level
             if (gain < 1f) gain = 1f;                    // only ever lift quiet audio
-            if (gain > 12f) gain = 12f;                  // don't over-amplify noise/near-silence
+            if (gain > 16f) gain = 16f;                  // enough for a far mic, without blowing noise up to speech
             if (peak * gain > 0.97f) gain = 0.97f / peak; // hard peak safety (may trim if hot)
             if (gain != 1f)
                 for (int i = 0; i < n; i++) x[i] *= gain;
