@@ -1,10 +1,11 @@
 unit uWhisperCat;
 
-{ Delphi mirror of the engine transcription catalog (SherpaModelCatalog + WhisperModelCatalog).
+{ Delphi mirror of the engine transcription catalog (SherpaModelCatalog).
   Used only for UI state: menu install hints and the "remove downloaded model" action. The
   engine is the source of truth for downloading/loading.
-    Fast / Balanced -> Parakeet (sherpa-onnx), a FOLDER of onnx files;
-    Max             -> Whisper large-v3, a single .bin file. }
+  All tiers use Parakeet (sherpa-onnx), a FOLDER of onnx files:
+    Fast               -> parakeet-fast      (int8, ~670 MB);
+    Balanced and Max   -> parakeet-accurate  (full precision, ~2.5 GB, shared download). }
 
 interface
 
@@ -45,11 +46,11 @@ begin
       end;
     tiMax:
       begin
-        Result.FileName := 'whisper-max.bin';
-        Result.IsFolder := False;
-        Result.SizeBytes := 3095033483;
+        Result.FileName := 'parakeet-accurate'; // same model/folder as Balanced
+        Result.IsFolder := True;
+        Result.SizeBytes := 2549700490;
         Result.LabelText := 'Maximum accuracy';
-        Result.Description := 'Whisper large-v3 - best for very noisy audio and accents (~3.1 GB).';
+        Result.Description := 'Parakeet v3 full precision - highest local transcription accuracy (~2.5 GB).';
       end;
   else
     begin
@@ -57,7 +58,7 @@ begin
       Result.IsFolder := True;
       Result.SizeBytes := 2549700490; // encoder+weights+decoder+joiner+tokens (fp32)
       Result.LabelText := 'Balanced (recommended)';
-      Result.Description := 'Parakeet v3 full precision - best accuracy of the fast engine (~2.5 GB).';
+      Result.Description := 'Parakeet v3 full precision - highest local transcription accuracy (~2.5 GB).';
     end;
   end;
 end;

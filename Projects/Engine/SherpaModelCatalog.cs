@@ -39,39 +39,48 @@ namespace SmartInterview
         private const string BaseFp32 =
             "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main";
 
-        /// <summary>True for the tiers backed by Parakeet (Fast/Balanced); Max stays Whisper.</summary>
-        public static bool IsParakeetLevel(TranscriptionIntelligence level) =>
-            level != TranscriptionIntelligence.Max;
+        /// <summary>
+        /// All transcription tiers use Parakeet. There is no reliable larger local model:
+        /// Canary 1B is not packaged for sherpa-onnx, and beam search on Parakeet TDT hallucinates
+        /// ~20% of the time (sherpa-onnx issue #3267), so greedy is the only safe decoder. Fast is
+        /// the int8 model; Balanced and Max share the full-precision model (Max ≥ Balanced).
+        /// </summary>
+        public static bool IsParakeetLevel(TranscriptionIntelligence level) => true;
 
-        public static SherpaModelInfo Get(TranscriptionIntelligence level) => level switch
+        public static SherpaModelInfo Get(TranscriptionIntelligence level)
         {
-            TranscriptionIntelligence.Fast => new SherpaModelInfo(
-                FolderName: "parakeet-fast",
-                EncoderFile: "encoder.int8.onnx",
-                DecoderFile: "decoder.int8.onnx",
-                JoinerFile: "joiner.int8.onnx",
-                Label: "Fast",
-                Description: "Parakeet v3 int8 — very fast, 25 languages, robust to noise (~670 MB).",
-                Files:
-                [
-                    new SherpaModelFile("encoder.int8.onnx", $"{BaseInt8}/encoder.int8.onnx",
-                        "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247", 652_184_281),
-                    new SherpaModelFile("decoder.int8.onnx", $"{BaseInt8}/decoder.int8.onnx",
-                        "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e", 11_845_275),
-                    new SherpaModelFile("joiner.int8.onnx", $"{BaseInt8}/joiner.int8.onnx",
-                        "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3", 6_355_277),
-                    new SherpaModelFile("tokens.txt", $"{BaseInt8}/tokens.txt", null, 93_939),
-                ]),
+            if (level == TranscriptionIntelligence.Fast)
+                return new SherpaModelInfo(
+                    FolderName: "parakeet-fast",
+                    EncoderFile: "encoder.int8.onnx",
+                    DecoderFile: "decoder.int8.onnx",
+                    JoinerFile: "joiner.int8.onnx",
+                    Label: "Fast",
+                    Description: "Parakeet v3 int8 — very fast, 25 languages, robust to noise (~670 MB).",
+                    Files:
+                    [
+                        new SherpaModelFile("encoder.int8.onnx", $"{BaseInt8}/encoder.int8.onnx",
+                            "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247", 652_184_281),
+                        new SherpaModelFile("decoder.int8.onnx", $"{BaseInt8}/decoder.int8.onnx",
+                            "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e", 11_845_275),
+                        new SherpaModelFile("joiner.int8.onnx", $"{BaseInt8}/joiner.int8.onnx",
+                            "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3", 6_355_277),
+                        new SherpaModelFile("tokens.txt", $"{BaseInt8}/tokens.txt", null, 93_939),
+                    ]);
 
-            // Balanced (default): full-precision Parakeet. encoder.onnx references the external
-            // weights file (encoder.weights) by relative path, so both must sit in the folder.
-            _ => new SherpaModelInfo(
+            // Balanced and Max share the SAME full-precision Parakeet model (same folder → one
+            // download). Max never transcribes worse than Balanced. encoder.onnx references the
+            // external weights file by relative path, so both must sit in the folder.
+            var label = level == TranscriptionIntelligence.Max
+                ? "Maximum accuracy"
+                : "Balanced (recommended)";
+            return new SherpaModelInfo(
                 FolderName: "parakeet-accurate",
                 EncoderFile: "encoder.onnx",
                 DecoderFile: "decoder.onnx",
                 JoinerFile: "joiner.onnx",
-                Label: "Balanced (recommended)",
-                Description: "Parakeet v3 full precision — best accuracy of the fast engine (~2.5 GB).",
+                Label: label,
+                Description: "Parakeet v3 full precision — highest local transcription accuracy (~2.5 GB).",
                 Files:
                 [
                     new SherpaModelFile("encoder.onnx", $"{BaseFp32}/encoder.onnx",
@@ -83,8 +92,8 @@ namespace SmartInterview
                     new SherpaModelFile("joiner.onnx", $"{BaseFp32}/joiner.onnx",
                         "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63", 25_286_330),
                     new SherpaModelFile("tokens.txt", $"{BaseFp32}/tokens.txt", null, 93_939),
-                ]),
-        };
+                ]);
+        }
 
         public static string DirFor(TranscriptionIntelligence level) =>
             Path.Combine(AppPaths.ModelsDir, Get(level).FolderName);

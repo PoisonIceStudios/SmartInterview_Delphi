@@ -90,9 +90,9 @@ I modelli **non** sono nel repository. Al primo avvio vengono scaricati in `<exe
 |------|-------------------|------------------------|
 | Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `parakeet-fast/` (Parakeet v3 int8, ~670 MB) |
 | Balanced | `response-balanced.bin` (Qwen2.5-7B) | `parakeet-accurate/` (Parakeet v3 fp32, ~2.5 GB) |
-| Max | `response-max.bin` (Qwen2.5-14B) | `whisper-max.bin` (ggml-large-v3, ~3.1 GB) |
+| Max | `response-max.bin` (Qwen2.5-14B) | `parakeet-accurate/` (Parakeet v3 fp32 — stesso modello di Balanced) |
 
-**Motore di trascrizione:** Fast/Balanced usano **NVIDIA Parakeet TDT 0.6B v3** via sherpa-onnx (transducer ONNX, 25 lingue con rilevamento automatico, ~10x più veloce di Whisper, niente allucinazioni "Grazie a tutti" sul rumore — gira su CPU, accurato e quasi istantaneo). Il tier **Max** resta **Whisper large-v3** come motore alternativo per audio molto rumoroso e per confronto diretto cambiando tier.
+**Motore di trascrizione:** tutti i tier usano **NVIDIA Parakeet TDT 0.6B v3** via sherpa-onnx (transducer ONNX, 25 lingue con rilevamento automatico, ~10x più veloce di Whisper, niente allucinazioni "Grazie a tutti" sul rumore — gira su CPU, accurato e quasi istantaneo). **Fast** è la variante int8 (più veloce); **Balanced** e **Max** condividono il modello a precisione piena (un solo download). Non esiste un modello locale affidabile più accurato di Parakeet fp32: Canary 1B non è pacchettizzato per sherpa-onnx e il beam search sul TDT di Parakeet allucina, quindi Max usa il miglior modello affidabile disponibile.
 
 Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazioni utente).
 
