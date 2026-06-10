@@ -8,7 +8,7 @@ SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo tra
 |-------|------------|
 | Interfaccia | Delphi 12 VCL (Win64) |
 | Motore AI | Assembly .NET 10 `SmartInterview.Engine.dll` (host `dotnet`) |
-| Speech-to-text | Parakeet TDT 0.6B v3 (sherpa-onnx) per Fast/Balanced; Whisper.net large-v3 per Max |
+| Speech-to-text | Whisper.net (lingua del colloquio forzata); Parakeet/sherpa-onnx opzionale |
 | LLM | LLamaSharp / llama.cpp (CUDA12, Vulkan, CPU) |
 
 ---
@@ -88,11 +88,11 @@ I modelli **non** sono nel repository. Al primo avvio vengono scaricati in `<exe
 
 | Tier | LLM (file locale) | Trascrizione (locale) |
 |------|-------------------|------------------------|
-| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `parakeet-fast/` (Parakeet v3 int8, ~670 MB) |
-| Balanced | `response-balanced.bin` (Qwen2.5-7B) | `parakeet-accurate/` (Parakeet v3 fp32, ~2.5 GB) |
-| Max | `response-max.bin` (Qwen2.5-14B) | `parakeet-accurate/` (Parakeet v3 fp32 — stesso modello di Balanced) |
+| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `whisper-fast.bin` (ggml-small, ~470 MB) |
+| Balanced | `response-balanced.bin` (Qwen2.5-7B) | `whisper-balanced.bin` (ggml-medium, ~1.5 GB) |
+| Max | `response-max.bin` (Qwen2.5-14B) | `whisper-max.bin` (ggml-large-v3, ~3.1 GB) |
 
-**Motore di trascrizione:** tutti i tier usano **NVIDIA Parakeet TDT 0.6B v3** via sherpa-onnx (transducer ONNX, 25 lingue con rilevamento automatico, ~10x più veloce di Whisper, niente allucinazioni "Grazie a tutti" sul rumore — gira su CPU, accurato e quasi istantaneo). **Fast** è la variante int8 (più veloce); **Balanced** e **Max** condividono il modello a precisione piena (un solo download). Non esiste un modello locale affidabile più accurato di Parakeet fp32: Canary 1B non è pacchettizzato per sherpa-onnx e il beam search sul TDT di Parakeet allucina, quindi Max usa il miglior modello affidabile disponibile.
+**Motore di trascrizione:** **Whisper** (Whisper.net), con la **lingua del colloquio forzata** — l'utente sceglie es. italiano e la trascrizione resta in italiano, senza scivolare in russo/inglese. Gira su GPU (CUDA→Vulkan→CPU): su una RTX 50xx via Vulkan anche large-v3 è rapido. Verificato 10/10 su voce reale italiana con termini tecnici inglesi ("Sai cos'è Unity?"). In alternativa, **Parakeet TDT 0.6B v3** (sherpa-onnx, CPU, multilingue auto) è disponibile come opzione via `SMARTINTERVIEW_USE_PARAKEET=1` — più veloce su CPU ma **senza** lingua forzata (rilevamento automatico), quindi sconsigliato quando serve una lingua fissa.
 
 Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazioni utente).
 

@@ -19,7 +19,16 @@ namespace SmartInterview
 
         public TranscriptionIntelligence Level { get; private set; } = TranscriptionIntelligence.Balanced;
 
-        private bool UseParakeet(TranscriptionIntelligence level) => SherpaModelCatalog.IsParakeetLevel(level);
+        // Default engine is WHISPER for every tier: the interview language is fixed (the user
+        // chooses Italian and must not get Russian/English), and only Whisper can force the
+        // decoding language. Parakeet is a transducer with intrinsic auto language detection —
+        // accurate but it cannot be pinned to a language — so it is opt-in (CPU-only speed) via
+        // SMARTINTERVIEW_USE_PARAKEET=1.
+        private static readonly bool ParakeetOptIn =
+            Environment.GetEnvironmentVariable("SMARTINTERVIEW_USE_PARAKEET") is "1" or "true";
+
+        private bool UseParakeet(TranscriptionIntelligence level) =>
+            ParakeetOptIn && SherpaModelCatalog.IsParakeetLevel(level);
 
         private bool ActiveIsParakeet => UseParakeet(Level);
 
