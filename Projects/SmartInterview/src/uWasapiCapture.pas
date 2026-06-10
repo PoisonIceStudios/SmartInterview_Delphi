@@ -76,6 +76,7 @@ const
   eConsole = 0;
   eCommunications = 2;
   AUDCLNT_SHAREMODE_SHARED = 0;
+  AUDCLNT_BUFFERFLAGS_SILENT = $2; // buffer content is undefined: must be treated as zeros
   AUDCLNT_STREAMFLAGS_LOOPBACK = $00020000;
   AUDCLNT_STREAMFLAGS_EVENTCALLBACK = $00040000;
   REFTIMES_PER_SEC = 10000000;
@@ -158,7 +159,11 @@ type
     function Commit: HResult; stdcall;
   end;
 
-  TWaveFormatEx = record
+  // MUST be packed: the Windows WAVEFORMATEX is 18 bytes (pack(1)). A non-packed Delphi
+  // record gets padded to 20, which shifts WAVEFORMATEXTENSIBLE.SubFormat from offset 24
+  // to 26 — the float GUID check then fails and float32 mic streams get decoded as int32
+  // PCM (pure noise: silence reads as ~0.47 RMS garbage).
+  TWaveFormatEx = packed record
     wFormatTag: Word;
     nChannels: Word;
     nSamplesPerSec: DWORD;
@@ -535,9 +540,15 @@ begin
         if Failed(Capture.GetBuffer(Data, NumFrames, Flags, DevPos, QpcPos)) then
           Break;
         try
-          if (Flags and 1) = 0 then
+          SetLength(Mono, NumFrames);
+          if (Flags and AUDCLNT_BUFFERFLAGS_SILENT) <> 0 then
           begin
-            SetLength(Mono, NumFrames);
+            // Silent packet: buffer content is undefined — substitute zeros, keep the timeline.
+            for I := 0 to NumFrames - 1 do
+              Mono[I] := 0;
+          end
+          else
+          begin
             Offset := 0;
             for I := 0 to NumFrames - 1 do
             begin
@@ -549,10 +560,10 @@ begin
               end;
               Mono[I] := Mono[I] / FChannels;
             end;
-            ResampleTo16k(Mono, FSampleRate, ResamplePos, LastSample, OutChunk);
-            if (Length(OutChunk) > 0) and Assigned(FOnSamples) then
-              FOnSamples(OutChunk);
           end;
+          ResampleTo16k(Mono, FSampleRate, ResamplePos, LastSample, OutChunk);
+          if (Length(OutChunk) > 0) and Assigned(FOnSamples) then
+            FOnSamples(OutChunk);
         finally
           Capture.ReleaseBuffer(NumFrames);
         end;
@@ -714,9 +725,14 @@ begin
         if Failed(Capture.GetBuffer(Data, NumFrames, Flags, DevPos, QpcPos)) then
           Break;
         try
-          if (Flags and 1) = 0 then
+          SetLength(Mono, NumFrames);
+          if (Flags and AUDCLNT_BUFFERFLAGS_SILENT) <> 0 then
           begin
-            SetLength(Mono, NumFrames);
+            for I := 0 to NumFrames - 1 do
+              Mono[I] := 0;
+          end
+          else
+          begin
             Offset := 0;
             for I := 0 to NumFrames - 1 do
             begin
@@ -728,10 +744,10 @@ begin
               end;
               Mono[I] := Mono[I] / FChannels;
             end;
-            ResampleTo16k(Mono, FSampleRate, ResamplePos, LastSample, OutChunk);
-            if (Length(OutChunk) > 0) and Assigned(FOnSamples) then
-              FOnSamples(OutChunk);
           end;
+          ResampleTo16k(Mono, FSampleRate, ResamplePos, LastSample, OutChunk);
+          if (Length(OutChunk) > 0) and Assigned(FOnSamples) then
+            FOnSamples(OutChunk);
         finally
           Capture.ReleaseBuffer(NumFrames);
         end;

@@ -64,7 +64,11 @@ implementation
 {$R *.dfm}
 
 const
-  MeterMax = 1.0;
+  // Full scale of the level meter and threshold slider. Real speech RMS rarely exceeds
+  // ~0.2, so a 0..1 scale left the whole usable range squashed into the first pixels;
+  // 0.25 makes silence (~0.01), the threshold line (~0.03) and speech (~0.05-0.2) all
+  // clearly distinguishable. Threshold VALUES stay absolute RMS — only the display scales.
+  MeterMax = 0.25;
   PBM_SETBARCOLOR = $0409;
   PBM_SETBKCOLOR = $2001;
 
