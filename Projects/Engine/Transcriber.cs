@@ -103,6 +103,12 @@ namespace SmartInterview
             try { _inflightCts?.Cancel(); } catch { }
         }
 
+        /// <summary>Frees the Whisper model and processors (used when switching to another engine tier).</summary>
+        public void Unload()
+        {
+            UnloadModel();
+        }
+
         private void UnloadModel()
         {
             try
@@ -195,8 +201,12 @@ namespace SmartInterview
         // low-frequency room noise is the usual reason Whisper mishears whole phrases; this makes
         // the speech the model actually sees consistent and clear. Upstream gates already removed
         // pure silence, so what arrives here is real speech.
-        private static void PreprocessForAsr(float[] x)
+        internal static void PreprocessForAsr(float[] x)
         {
+            // Diagnostic escape hatch: SMARTINTERVIEW_SKIP_ASR_PREPROCESS=1 feeds the raw
+            // capture to the model, to tell preprocessing issues apart from model issues.
+            if (Environment.GetEnvironmentVariable("SMARTINTERVIEW_SKIP_ASR_PREPROCESS") == "1")
+                return;
             int n = x.Length;
             if (n == 0) return;
 
@@ -240,7 +250,7 @@ namespace SmartInterview
         // Whisper (post-preprocessing, 16 kHz mono) to %LOCALAPPDATA%\SmartInterview\
         // last-whisper-input.wav. Playing it back instantly reveals whether a misheard phrase is a
         // wrong/quiet/noisy capture or a genuine model miss.
-        private static void MaybeDumpWav(float[] samples)
+        internal static void MaybeDumpWav(float[] samples)
         {
             var flag = Environment.GetEnvironmentVariable("SMARTINTERVIEW_DUMP_AUDIO");
             if (flag is not ("1" or "true" or "TRUE")) return;

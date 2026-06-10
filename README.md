@@ -8,7 +8,7 @@ SmartInterview cattura l'audio di sistema (e opzionalmente il microfono), lo tra
 |-------|------------|
 | Interfaccia | Delphi 12 VCL (Win64) |
 | Motore AI | Assembly .NET 10 `SmartInterview.Engine.dll` (host `dotnet`) |
-| Speech-to-text | Whisper.net |
+| Speech-to-text | Parakeet TDT 0.6B v3 (sherpa-onnx) per Fast/Balanced; Whisper.net large-v3 per Max |
 | LLM | LLamaSharp / llama.cpp (CUDA12, Vulkan, CPU) |
 
 ---
@@ -86,11 +86,13 @@ Il motore **rifiuta tutti i comandi AI** senza autenticazione licenza valida. De
 
 I modelli **non** sono nel repository. Al primo avvio vengono scaricati in `<exe>\models` o `%LOCALAPPDATA%\SmartInterview\models`.
 
-| Tier | LLM (file locale) | Whisper (file locale) |
+| Tier | LLM (file locale) | Trascrizione (locale) |
 |------|-------------------|------------------------|
-| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `whisper-fast.bin` (ggml-small) |
-| Balanced | `response-balanced.bin` (Qwen2.5-7B) | `whisper-balanced.bin` (ggml-medium) |
-| Max | `response-max.bin` (Qwen2.5-14B) | `whisper-max.bin` (ggml-large-v3) |
+| Fast | `response-fast.bin` (Qwen2.5-3B Q4_K_M) | `parakeet-fast/` (Parakeet v3 int8, ~670 MB) |
+| Balanced | `response-balanced.bin` (Qwen2.5-7B) | `parakeet-accurate/` (Parakeet v3 fp32, ~2.5 GB) |
+| Max | `response-max.bin` (Qwen2.5-14B) | `whisper-max.bin` (ggml-large-v3, ~3.1 GB) |
+
+**Motore di trascrizione:** Fast/Balanced usano **NVIDIA Parakeet TDT 0.6B v3** via sherpa-onnx (transducer ONNX, 25 lingue con rilevamento automatico, ~10x più veloce di Whisper, niente allucinazioni "Grazie a tutti" sul rumore — gira su CPU, accurato e quasi istantaneo). Il tier **Max** resta **Whisper large-v3** come motore alternativo per audio molto rumoroso e per confronto diretto cambiando tier.
 
 Il tier viene scelto in base alla GPU/VRAM rilevata (`HardwareProbe` + impostazioni utente).
 

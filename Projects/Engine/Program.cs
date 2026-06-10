@@ -10,7 +10,8 @@ namespace SmartInterview.Engine;
 /// </summary>
 internal static class Program
 {
-    private static readonly Transcriber Transcriber = new();
+    // Hybrid: Fast/Balanced -> Parakeet (sherpa-onnx), Max -> Whisper large-v3.
+    private static readonly HybridTranscriber Transcriber = new();
     private static readonly LocalLlmClient Llm = new();
     private static CancellationTokenSource? _streamCts;
     private static readonly object _streamCtsLock = new();

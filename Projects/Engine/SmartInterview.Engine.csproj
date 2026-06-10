@@ -25,6 +25,7 @@
     <PackageReference Include="LLamaSharp.Backend.Cuda12.Windows" Version="0.27.0" />
     <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.27.0" />
     <PackageReference Include="LLamaSharp.Backend.Vulkan.Windows" Version="0.27.0" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.2" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" />
@@ -50,6 +51,8 @@
           SourceFiles="@(_EngineDeployFiles)"
           DestinationFiles="@(_EngineDeployFiles->'$(_DelphiDebugDeployDir)%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(_DelphiDeployDir)sherpa-onnx-c-api.dll') or !Exists('$(_DelphiDeployDir)onnxruntime.dll')"
+           Text="Engine deploy missing sherpa-onnx (Parakeet) native libs. Run: dotnet build -c $(Configuration)" />
     <Error Condition="!Exists('$(_DelphiDeployDir)runtimes\win-x64\native\vulkan\llama.dll')"
            Text="Engine deploy missing Vulkan backend. Run: dotnet build -c $(Configuration)" />
     <Error Condition="!Exists('$(_DelphiDeployDir)runtimes\win-x64\native\cuda12\llama.dll')"

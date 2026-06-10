@@ -17,9 +17,16 @@ namespace SmartInterview
         private static readonly string[] KnownModelFiles =
         {
             "ggml-small.bin",
+            "whisper-max.bin",
             "response-balanced.bin",
             "response-fast.bin",
             "response-max.bin",
+        };
+
+        private static readonly string[] KnownModelDirs =
+        {
+            "parakeet-fast",
+            "parakeet-accurate",
         };
 
         private static bool HasExistingModels(string dir)
@@ -29,6 +36,8 @@ namespace SmartInterview
             {
                 foreach (var name in KnownModelFiles)
                     if (File.Exists(Path.Combine(dir, name))) return true;
+                foreach (var sub in KnownModelDirs)
+                    if (Directory.Exists(Path.Combine(dir, sub))) return true;
             }
             catch { /* fall through */ }
             return false;
