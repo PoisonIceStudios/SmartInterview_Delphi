@@ -341,6 +341,9 @@ namespace SmartInterview
                             $"prob={seg.Probability:0.00} text=\"{part.Trim()}\"");
                         continue;
                     }
+                    part = CleanSegmentText(part);
+                    if (string.IsNullOrWhiteSpace(part))
+                        continue;
                     onPart(part);
                 }
             }
@@ -382,6 +385,45 @@ namespace SmartInterview
             // generic
             "bye", "bye bye", "ok", "okay",
         };
+
+        // Post-clean a decoded segment for commercial robustness across voices/conditions:
+        //  (1) for a Latin-script interview language, drop stray non-Latin glyphs (CJK/Cyrillic)
+        //      Whisper occasionally injects even with the language forced — always wrong here;
+        //  (2) collapse pathological repetition (Whisper loops a word dozens of times on very
+        //      reverberant/noisy audio) down to a couple of occurrences.
+        private string CleanSegmentText(string text)
+        {
+            if (_language is not ("ru" or "zh" or "ja" or "ko" or "uk" or "bg" or "sr"))
+            {
+                var sb = new System.Text.StringBuilder(text.Length);
+                foreach (var ch in text)
+                {
+                    // Keep Latin (incl. accents, up to Latin Extended-B) + whitespace/punct/symbols;
+                    // drop Cyrillic (U+0400..) and CJK/fullwidth (U+3000..).
+                    if (ch < 'ɐ' || char.IsWhiteSpace(ch) || char.IsPunctuation(ch) || char.IsSymbol(ch))
+                        sb.Append(ch);
+                }
+                text = sb.ToString();
+            }
+            return CollapseRepetition(text);
+        }
+
+        private static string CollapseRepetition(string text)
+        {
+            var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length < 6) return text;
+            var outWords = new List<string>(words.Length);
+            int run = 0;
+            string prev = "";
+            foreach (var w in words)
+            {
+                var key = w.Trim(',', '.', '!', '?', ';', ':').ToLowerInvariant();
+                if (key == prev) run++;
+                else { run = 0; prev = key; }
+                if (run < 3) outWords.Add(w); // keep at most 3 consecutive identical words
+            }
+            return string.Join(' ', outWords);
+        }
 
         private static bool IsHallucination(SegmentData seg)
         {
