@@ -57,7 +57,8 @@ begin
   if not TFrmDisclaimer.EnsureAccepted then
     Halt(0);
 
-  TFrmInterviewSetup.RequireProfile;
+  // No profile dialog before the main window: the main form shows a warning in its status bar
+  // and blocks starting the interview until the profile (role) is set.
 
   try
     TFrmSplash.RunStartup;

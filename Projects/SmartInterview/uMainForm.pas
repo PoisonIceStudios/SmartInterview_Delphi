@@ -194,6 +194,7 @@ type
     FMatcher: TReadAlongMatcher;
     FMicMonitor: TWasapi16kSource;
     FProfile: TInterviewProfile;
+    FLblTitle: TLabel;
     FIntelligence: TResponseIntelligence;
     FTranscription: TTranscriptionIntelligence;
     FAnswerLength: TAnswerLength;
@@ -305,6 +306,10 @@ type
     procedure StopReadAlong;
     procedure StartSettingsMonitor;
     procedure StopSettingsMonitor;
+    procedure InitInterviewBanner;
+    procedure UpdateInterviewBanner;
+    function ProfileRoleSet: Boolean;
+    function RequireProfileToStart: Boolean;
     procedure SetUseMicEnabled(Value: Boolean);
     procedure SetListeningKeyChoice(const Key: TListeningKey);
     procedure RebuildMicMenu;
@@ -862,6 +867,8 @@ begin
   ApplyCaptureHiding;
   UpdatePinVisual;
   UpdateSetupVisual;
+  if FLblTitle = nil then
+    InitInterviewBanner;
   StartMicMonitor;
   tmrIcon.Enabled := True;
   tmrEngine.Enabled := True;
@@ -943,6 +950,7 @@ end;
 procedure TMainForm.OnListeningKeyPressed;
 begin
   if not FReady or FListening or FAutoMode then Exit;
+  if not RequireProfileToStart then Exit;
   // Barge-in: if the model is mid-answer, abandon that answer so the user can immediately ask a
   // new question instead of waiting for the generation to finish. Bumping the answer generation
   // makes any in-flight stream's tokens be ignored, and CancelGeneration tells the engine to stop
@@ -1519,6 +1527,7 @@ end;
 procedure TMainForm.ToggleAutoMode;
 begin
   if FModelBusy or not FReady then Exit;
+  if not FAutoMode and not RequireProfileToStart then Exit;
   SetAutoMode(not FAutoMode);
 end;
 
@@ -2161,6 +2170,48 @@ begin
   mnuMain.Popup(P.X, P.Y);
 end;
 
+procedure TMainForm.InitInterviewBanner;
+begin
+  // Interview title shown just above the status bar (e.g. "Unity Developer").
+  pnlStatus.Height := 48;
+  FLblTitle := TLabel.Create(Self);
+  FLblTitle.Parent := pnlStatus;
+  FLblTitle.Align := alTop;
+  FLblTitle.Height := 18;
+  FLblTitle.Alignment := taCenter;
+  FLblTitle.Layout := tlCenter;
+  FLblTitle.Transparent := True;
+  FLblTitle.Font.Style := [fsBold];
+  FLblTitle.Caption := '';
+  lblStatusBar.Align := alClient;
+  UpdateInterviewBanner;
+end;
+
+function TMainForm.ProfileRoleSet: Boolean;
+begin
+  Result := Trim(FProfile.Role) <> '';
+end;
+
+procedure TMainForm.UpdateInterviewBanner;
+begin
+  if FLblTitle <> nil then
+  begin
+    if ProfileRoleSet then
+      FLblTitle.Caption := Trim(FProfile.Role)
+    else
+      FLblTitle.Caption := 'No interview profile set';
+  end;
+  if not ProfileRoleSet then
+    SetStatus(#$26A0' Set your interview profile before starting.');
+end;
+
+function TMainForm.RequireProfileToStart: Boolean;
+begin
+  Result := ProfileRoleSet;
+  if not Result then
+    SetStatus(#$26A0' Set your interview profile before starting.');
+end;
+
 procedure TMainForm.btnSetupClick(Sender: TObject);
 begin
   if TFrmInterviewSetup.ShowSetupDialog(Self) then
@@ -2168,6 +2219,7 @@ begin
     FProfile := ProfileLoad;
     FEngine.SetProfile(FProfile.Role, FProfile.TechStack, FProfile.JobDescription, FProfile.Experience);
     UpdateSetupVisual;
+    UpdateInterviewBanner;
     RefreshContextIndicator;
   end;
 end;

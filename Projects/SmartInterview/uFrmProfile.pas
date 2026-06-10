@@ -29,13 +29,9 @@ type
     procedure btnLaterClick(Sender: TObject);
   private
     FResult: TInterviewProfile;
-    FMandatory: Boolean;
     procedure LoadProfile(const P: TInterviewProfile);
   public
     property ProfileResult: TInterviewProfile read FResult;
-    // When mandatory, the dialog cannot be skipped and the Role is required (it feeds the
-    // speech-recognition vocabulary hint, e.g. "Unity Developer" helps Whisper hear "Unity").
-    property Mandatory: Boolean read FMandatory write FMandatory;
   end;
 
 var
@@ -55,19 +51,16 @@ end;
 
 procedure TFrmProfile.FormCreate(Sender: TObject);
 begin
+  // The role is what matters (it tunes the answers and the transcription vocabulary); the rest
+  // is optional. Mark it so in the UI.
+  lblStack.Caption := lblStack.Caption + ' (optional)';
+  lblJob.Caption := lblJob.Caption + ' (optional)';
+  lblExp.Caption := lblExp.Caption + ' (optional)';
   LoadProfile(ProfileLoad);
 end;
 
 procedure TFrmProfile.btnSaveClick(Sender: TObject);
 begin
-  if FMandatory and (Trim(edtRole.Text) = '') then
-  begin
-    MessageDlg('Enter at least your role (e.g. "Unity Developer"). '+
-      'It tunes the answers and helps the transcription recognise technical terms.',
-      mtInformation, [mbOK], 0);
-    edtRole.SetFocus;
-    Exit;
-  end;
   FResult.Role := Trim(edtRole.Text);
   FResult.TechStack := Trim(edtStack.Text);
   FResult.JobDescription := Trim(memJob.Text);
