@@ -20,11 +20,16 @@ namespace SmartInterview
         long SizeBytes,
         string Label,
         string Description,
-        long ApproxVramBytes);
+        long ApproxVramBytes,
+        bool HybridThinking);
 
     /// <summary>
     /// The three local models behind the intelligence levels. GGUF Q4_K_M builds from
-    /// bartowski (same quantization as the previous Ollama model, so "Balanced" == parity).
+    /// bartowski. Qwen3 generation: same speed class per tier as the previous Qwen2.5
+    /// set, but markedly better instruction-following, reasoning, and answer depth.
+    /// Qwen3-8B/14B are hybrid-thinking models: HybridThinking=true makes the client
+    /// prefill an empty think block so they answer directly (no visible reasoning, no
+    /// wasted tokens). Qwen3-4B-Instruct-2507 is a pure instruct model (no thinking).
     /// </summary>
     internal static class ModelCatalog
     {
@@ -34,30 +39,33 @@ namespace SmartInterview
         {
             ResponseIntelligence.Fast => new LocalModelInfo(
                 FileName: "response-fast.bin",
-                Url: $"{Base}/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-                Sha256: "9c9f56a391a3abbd5b89d0245bf6106081bcc3173119d4229235dd9d23253f94",
-                SizeBytes: 1_929_903_264,
+                Url: $"{Base}/Qwen_Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+                Sha256: "2fde00ce69dd4899c70d020845e2638353015bba0fdf161b3eb965f2bca4464e",
+                SizeBytes: 2_497_280_736,
                 Label: "Fast",
-                Description: "Quick responses, basic accuracy — best for lower-end PCs (~2 GB).",
-                ApproxVramBytes: 3_000_000_000),
+                Description: "Quick responses, solid accuracy — best for lower-end PCs (~2.5 GB).",
+                ApproxVramBytes: 3_500_000_000,
+                HybridThinking: false),
 
             ResponseIntelligence.Max => new LocalModelInfo(
                 FileName: "response-max.bin",
-                Url: $"{Base}/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-                Sha256: "e47ad95dad6ff848b431053b375adb5d39321290ea2c638682577dafca87c008",
-                SizeBytes: 8_988_110_976,
+                Url: $"{Base}/Qwen_Qwen3-14B-GGUF/resolve/main/Qwen_Qwen3-14B-Q4_K_M.gguf",
+                Sha256: "915913e22399475dbe6c968ac014d9f1fbe08975e489279aede9d5c7b2c98eb6",
+                SizeBytes: 9_001_753_632,
                 Label: "Maximum accuracy",
                 Description: "Most accurate, detailed answers — needs more memory and time (~9 GB).",
-                ApproxVramBytes: 11_000_000_000),
+                ApproxVramBytes: 11_000_000_000,
+                HybridThinking: true),
 
             _ => new LocalModelInfo(
                 FileName: "response-balanced.bin",
-                Url: $"{Base}/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-                Sha256: "65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423",
-                SizeBytes: 4_683_074_240,
+                Url: $"{Base}/Qwen_Qwen3-8B-GGUF/resolve/main/Qwen_Qwen3-8B-Q4_K_M.gguf",
+                Sha256: "54fffa050078e984116639c83dfb64b5aa6d4cd474e018b076777c632bbccccd",
+                SizeBytes: 5_027_784_224,
                 Label: "Balanced (recommended)",
-                Description: "Good balance of accuracy and speed (~4.7 GB).",
-                ApproxVramBytes: 6_500_000_000),
+                Description: "Good balance of accuracy and speed (~5 GB).",
+                ApproxVramBytes: 7_000_000_000,
+                HybridThinking: true),
         };
 
         public static string PathFor(ResponseIntelligence level) =>

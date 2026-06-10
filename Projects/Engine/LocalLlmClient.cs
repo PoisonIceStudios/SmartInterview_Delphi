@@ -15,9 +15,20 @@ namespace SmartInterview
     {
         private sealed record ChatMessage(string Role, string Content);
 
-        // ChatML markers used by Qwen2.5.
+        // ChatML markers used by Qwen models.
         private const string ImStart = "<|im_start|>";
         private const string ImEnd = "<|im_end|>";
+
+        // Qwen3 hybrid-thinking models reason inside <think>…</think> before answering.
+        // Prefilling an EMPTY think block in the assistant turn is the official way to force
+        // direct answers when building the prompt manually — no reasoning latency, no leaked
+        // chain-of-thought. Pure-instruct models (Qwen3-*-Instruct-2507) must NOT get it.
+        private const string NoThinkPrefill = "<think>\n\n</think>\n\n";
+
+        private bool HybridThinking => ModelCatalog.Get(Level).HybridThinking;
+
+        private string AssistantStart() =>
+            ImStart + "assistant\n" + (HybridThinking ? NoThinkPrefill : string.Empty);
 
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly List<ChatMessage> _history = new();
@@ -288,7 +299,7 @@ namespace SmartInterview
                     SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0.35f },
                 };
                 var prompt = $"{ImStart}system\n{SystemPrompt()}{ImEnd}\n" +
-                             $"{ImStart}user\nSay OK.{ImEnd}\n{ImStart}assistant\n";
+                             $"{ImStart}user\nSay OK.{ImEnd}\n{AssistantStart()}";
                 await _gate.WaitAsync(ct);
                 try
                 {
@@ -316,13 +327,13 @@ namespace SmartInterview
             if (utterance.Length == 0) return false;
 
             string prompt = $"{ImStart}system\n" +
-                "You classify short automatic transcripts from a live job interview.\n" +
+                "You classify short automatic transcripts from a live job interview (technical or HR screening).\n" +
                 $"Interview language: {LanguageName}.\n" +
                 "Reply with exactly one word: ANSWER or SKIP.\n" +
                 "ANSWER: the speaker asks a question, requests information, assigns a task, or raises a topic the candidate must respond to — including very short or informal phrasing, and even without a question mark.\n" +
                 "SKIP: only acknowledgement, backchannel, filler, bare greeting, thanks, or reaction with nothing to address (e.g. ok, thanks, I see, interesting, mm-hm).\n" +
                 "One word only. No explanation.\n" +
-                $"{ImEnd}\n{ImStart}user\n{utterance}{ImEnd}\n{ImStart}assistant\n";
+                $"{ImEnd}\n{ImStart}user\n{utterance}{ImEnd}\n{AssistantStart()}";
 
             var ip = new InferenceParams
             {
@@ -385,6 +396,11 @@ namespace SmartInterview
             };
 
             var full = new StringBuilder();
+            // Defensive think-block suppression: with the empty-think prefill the model should
+            // never reason out loud, but if it still opens a <think> block (sampling noise),
+            // swallow everything until </think> instead of showing chain-of-thought to the user.
+            bool inThink = false;
+            var pending = new StringBuilder(); // holds a potential partial "<think"/"</think" tag
             await _gate.WaitAsync(ct);
             try
             {
@@ -396,8 +412,42 @@ namespace SmartInterview
                     int cut = clean.IndexOf("<|im", StringComparison.Ordinal);
                     if (cut >= 0) clean = clean.Substring(0, cut);
                     if (clean.Length == 0) continue;
-                    full.Append(clean);
-                    onToken(clean);
+
+                    pending.Append(clean);
+                    string buf = pending.ToString();
+                    if (inThink)
+                    {
+                        int close = buf.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+                        if (close < 0) { TrimPendingToTagTail(pending); continue; }
+                        inThink = false;
+                        pending.Clear();
+                        pending.Append(buf[(close + "</think>".Length)..].TrimStart());
+                        buf = pending.ToString();
+                        if (buf.Length == 0) continue;
+                    }
+                    int open = buf.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
+                    if (open >= 0)
+                    {
+                        string before = buf[..open];
+                        if (before.Length > 0) { full.Append(before); onToken(before); }
+                        inThink = true;
+                        pending.Clear();
+                        pending.Append(buf[(open + "<think>".Length)..]);
+                        continue;
+                    }
+                    // Hold back only a possible partial tag at the end; emit the rest.
+                    int hold = PartialTagSuffixLength(buf);
+                    string emit = buf[..^hold];
+                    if (emit.Length > 0) { full.Append(emit); onToken(emit); }
+                    pending.Clear();
+                    if (hold > 0) pending.Append(buf[^hold..]);
+                }
+                // Flush any held-back tail that turned out not to be a tag.
+                if (!inThink && pending.Length > 0)
+                {
+                    string tail = pending.ToString();
+                    full.Append(tail);
+                    onToken(tail);
                 }
             }
             catch
@@ -414,12 +464,36 @@ namespace SmartInterview
             _history.Add(new ChatMessage("assistant", full.ToString()));
         }
 
+        /// <summary>Length of a suffix of <paramref name="buf"/> that could be the start of
+        /// "&lt;think&gt;" or "&lt;/think&gt;" (so it must be held back until more tokens arrive).</summary>
+        private static int PartialTagSuffixLength(string buf)
+        {
+            int max = Math.Min(buf.Length, "</think>".Length - 1);
+            for (int len = max; len > 0; len--)
+            {
+                var tail = buf[^len..];
+                if ("<think>".StartsWith(tail, StringComparison.OrdinalIgnoreCase) ||
+                    "</think>".StartsWith(tail, StringComparison.OrdinalIgnoreCase))
+                    return len;
+            }
+            return 0;
+        }
+
+        /// <summary>While inside a think block only a partial closing tag needs keeping.</summary>
+        private static void TrimPendingToTagTail(StringBuilder pending)
+        {
+            string buf = pending.ToString();
+            int hold = PartialTagSuffixLength(buf);
+            pending.Clear();
+            if (hold > 0) pending.Append(buf[^hold..]);
+        }
+
         private string BuildChatMlPrompt()
         {
             var sb = new StringBuilder();
             foreach (var m in _history)
                 sb.Append(ImStart).Append(m.Role).Append('\n').Append(m.Content).Append(ImEnd).Append('\n');
-            sb.Append(ImStart).Append("assistant\n");
+            sb.Append(AssistantStart());
             return sb.ToString();
         }
 
@@ -447,10 +521,10 @@ namespace SmartInterview
             return $"""
               {langLock}
 
-              You are assisting a candidate during a live, online technical job interview.
-              Your INPUT is an automatic transcription of audio captured from the call, so it
-              may contain noise, filler words, misheard words, broken sentences, or chunks of
-              unrelated conversation.
+              You are assisting a candidate during a live, online job interview (technical and/or
+              HR screening). Your INPUT is an automatic transcription of audio captured from the
+              call, so it may contain noise, filler words, misheard words, broken sentences, or
+              chunks of unrelated conversation.
 
               YOU ARE THE CANDIDATE answering OUT LOUD to the interviewer, right now, in the first
               person. Speak your answer directly, as the words you would actually say.
@@ -484,6 +558,38 @@ namespace SmartInterview
               - There is NO middle ground: either output [[SKIP]] alone, or give a clean direct
                 answer. NEVER produce a half-answer that questions or apologises for the input.
               - Use the previous conversation as context for follow-ups.
+
+              READ THE INTERVIEWER'S INTENT (silently — never name the category out loud). Every
+              question is also a test of judgement: identify WHY it is being asked, then answer to
+              score the hidden criterion, not just the literal words.
+              - TECHNICAL / knowledge questions: answer correctly and concretely, show practical
+                experience ("in my last project I…"), mention the key trade-off or pitfall an
+                experienced person would know. Depth over buzzwords; never recite a textbook.
+              - BEHAVIOURAL questions ("tell me about a time…", "how did you handle…"): tell ONE
+                specific story in natural STAR shape — the situation in a sentence, what YOU did,
+                and the measurable result — without ever saying "situation/task/action/result".
+                Pick stories consistent with the candidate profile below.
+              - MOTIVATION / culture-fit ("why this company", "why are you leaving", "where do you
+                see yourself"): be positive and specific about what attracts you to THIS role; show
+                ambition aligned with the job, never desperation, never "I just need a job".
+              - TRICK / STRESS questions — these are tests of composure and self-awareness, do not
+                take the bait:
+                * "What's your greatest weakness?" → give a REAL but non-disqualifying weakness +
+                  the concrete habit you built to manage it. Never "I'm a perfectionist", never a
+                  strength in disguise, never a weakness core to the role.
+                * "Why are you leaving / what do you dislike about your current job?" → NEVER
+                  bad-mouth an employer, manager, or colleague. Frame it as seeking growth.
+                * "Why shouldn't we hire you?" / provocative or absurd questions → stay calm and
+                  confident, reframe positively, show you can't be rattled.
+                * Pressure on gaps, failures, or mistakes → own the mistake briefly, focus on what
+                  you learned and changed; no excuses, no blaming others.
+                * Leading questions inviting you to criticise a technology, methodology, or person
+                  → give a balanced view; absolute trash-talk reads as immaturity.
+              - SALARY questions: do not name a number first if avoidable — express flexibility and
+                interest in total fit; if pushed, give a reasonable market range for the role and
+                say it depends on the overall package.
+              - This is SPOKEN language: flowing natural sentences, no bullet lists, no headings,
+                no markdown. Sound like a confident human, not a memorised script.
 
               {lengthHint}
               The length instruction above is mandatory and overrides any instinct to be brief or

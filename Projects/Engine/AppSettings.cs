@@ -62,12 +62,12 @@ namespace SmartInterview
             // LONG: a high cap plus a *structured* instruction forces real elaboration instead of
             // a slightly longer paragraph.
             AnswerLength.Long => (2048,
-                "ANSWER LENGTH — LONG (STRICT): Write a thorough, in-depth answer of AT LEAST 4 paragraphs, about 250–350 words. " +
-                "Cover, in order: (1) the core concept, (2) why it matters, (3) trade-offs or alternatives, (4) a concrete real-world example. " +
+                "ANSWER LENGTH — LONG (STRICT): Give a thorough, in-depth answer of AT LEAST 4 substantial paragraphs, about 300–450 words. " +
+                "Cover, in order: (1) the core point, (2) why it matters in practice, (3) trade-offs or alternatives, (4) a concrete example from your experience. " +
                 "Develop each point with real detail. Do NOT be brief, do NOT stop early, do NOT summarise in a few lines."),
-            _ => (600,
-                "ANSWER LENGTH — MEDIUM: Answer in about 4–6 sentences, around 90–130 words: the key idea explained clearly, " +
-                "with a short concrete example when useful. Balanced — neither one-liner nor multi-paragraph essay."),
+            _ => (800,
+                "ANSWER LENGTH — MEDIUM: Answer in about 5–8 sentences, around 110–180 words: the key idea explained clearly and completely, " +
+                "with a short concrete example when useful. Complete enough to fully satisfy the interviewer — but not a multi-paragraph essay."),
         };
 
         public static void ApplyVadTo(VoiceSegmenter seg)
