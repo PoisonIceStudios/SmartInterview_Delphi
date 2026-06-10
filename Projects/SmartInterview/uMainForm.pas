@@ -1180,7 +1180,12 @@ begin
           LiveTransDiagWrite('LIVE skip no-speech');
           Exit;
         end;
-        if not TranscribeAsync(Snap, Text) or not FListening or (Session <> FListenSession) then
+        // Live preview uses the engine's live path (ALive=True): with Parakeet this suppresses
+        // half-spoken audio under ~1.5s, which would otherwise auto-detect the wrong language and
+        // show invented English. The FINAL transcription (RunListenFinalize) stays on the
+        // non-live path, so short complete questions are still transcribed.
+        if not FEngine.TranscribeStream(Snap, nil, Text, True) or
+           not FListening or (Session <> FListenSession) then
           Exit;
         Text := CleanTranscriptText(Text);
         if Text.IsEmpty or not ShouldShowHearingPreview(Text) then

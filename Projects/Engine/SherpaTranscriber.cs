@@ -115,17 +115,20 @@ namespace SmartInterview
         /// Decodes the whole buffer and emits the text as a single part (offline transducer
         /// decoding is fast enough that incremental segments are unnecessary).
         /// </summary>
-        // Below ~1.5 s the model has too little context: Parakeet's automatic language detection
-        // misfires and emits invented English words ("Psycho", "Yeah") on a half-spoken Italian
-        // question. Measured: 1.0 s -> garbage, 1.5 s -> correct. The live preview sends growing
-        // cumulative audio, so it simply shows nothing until enough has been spoken, then the
-        // correct text appears. Real interview questions are always longer than this.
-        private const int MinReliableSamples = 24000; // 1.5 s @ 16 kHz
+        // Live-preview gate ONLY. A full utterance (VAD segment end or key release) is decoded at
+        // any length ≥0.1s and is accurate even at ~1s (measured 10/10 on real speech). But the
+        // live preview feeds growing, half-spoken audio; under ~1.5s Parakeet's auto language
+        // detection misfires and invents English ("Psycho", "Yeah"). So we suppress only the
+        // PREVIEW below this length — the preview stays blank a moment, then shows correct text;
+        // the final transcription is never gated.
+        private static readonly int LivePreviewMinSamples =
+            int.TryParse(Environment.GetEnvironmentVariable("SMARTINTERVIEW_ASR_MIN_SAMPLES"), out var m) ? m : 24000;
 
         public async Task TranscribeStreamAsync(float[] samples, Action<string> onPart, CancellationToken ct,
             bool cancelPrevious = false, bool liveMode = false)
         {
-            if (samples.Length < MinReliableSamples) return;
+            if (samples.Length < 1600) return;
+            if (liveMode && samples.Length < LivePreviewMinSamples) return;
             if (_disposed) return;
 
             Transcriber.PreprocessForAsr(samples);
