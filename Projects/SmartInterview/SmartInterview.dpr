@@ -57,7 +57,7 @@ begin
   if not TFrmDisclaimer.EnsureAccepted then
     Halt(0);
 
-  TFrmInterviewSetup.RunOptionalPrompt;
+  TFrmInterviewSetup.RequireProfile;
 
   try
     TFrmSplash.RunStartup;

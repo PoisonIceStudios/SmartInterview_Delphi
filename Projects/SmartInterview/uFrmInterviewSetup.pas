@@ -15,6 +15,7 @@ type
     procedure btnSkipClick(Sender: TObject);
   public
     class procedure RunOptionalPrompt;
+    class procedure RequireProfile;
     class function ShowSetupDialog(AOwner: TComponent): Boolean;
   end;
 
@@ -44,6 +45,28 @@ begin
     ShowSetupDialog(nil)
   else
     ProfileMarkSetupPromptSkipped;
+end;
+
+// Mandatory before the interview: the candidate must enter at least the role. It configures the
+// AI and, crucially, the speech-recognition vocabulary hint (e.g. "Unity Developer" / a stack of
+// "Unity, C#, .NET" makes Whisper transcribe "Unity" instead of "uniti"/"una T").
+class procedure TFrmInterviewSetup.RequireProfile;
+var
+  P: TInterviewProfile;
+begin
+  P := ProfileLoad;
+  if P.HasContent and (Trim(P.Role) <> '') then
+  begin
+    ProfileMarkSetupPromptDone;
+    Exit;
+  end;
+  FrmProfile.Mandatory := True;
+  FrmProfile.BorderIcons := FrmProfile.BorderIcons - [biSystemMenu];
+  FrmProfile.btnLater.Visible := False;
+  repeat
+    PrepareDialogAboveMain(FrmProfile);
+  until FrmProfile.ShowModal = mrOK; // mrOK is only returned once the Role is filled in
+  ProfileMarkSetupPromptDone;
 end;
 
 class function TFrmInterviewSetup.ShowSetupDialog(AOwner: TComponent): Boolean;

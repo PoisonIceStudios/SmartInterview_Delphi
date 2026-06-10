@@ -367,11 +367,10 @@ const
   HTCAPTION = 2;
   LWA_ALPHA = $2;
   MicMonitorWarmupMs = 2000;
-  // Default mic gate (RMS, 0..1). Kept LOW on purpose so a quiet/distant voice is never gated out
-  // ("too low to hear"): the engine normalizes the level (AGC) and filters noise/silence itself.
-  // This is only the slider's default; the user raises it from Microphone settings if the room is
-  // noisy. (Was 0.500 — gated out the voice; then 0.060 — still too high for a far mic.)
-  MicDefaultThreshold = 0.012;
+  // Default mic gate (RMS, 0..1). Only audio above this is treated as speech, then normalized by
+  // the engine (AGC). This is just the slider's starting point — the user sets the line on the
+  // live meter for their mic/room. (Was 0.500/0.060 too high, 0.012 too low.)
+  MicDefaultThreshold = 0.030;
   MicMeterMaxStep = 0.06;       // ignore single-buffer spikes on the level meter
   MicActiveHoldMs = 250;
 

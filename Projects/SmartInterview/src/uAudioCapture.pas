@@ -52,12 +52,12 @@ uses
 const
   MaxCaptureSamples = 16000 * 60 * 10;
   SpeechFrameSamples = 320;         // 20 ms @ 16 kHz
-  // Low gates by design: a quiet/distant mic must still pass. The engine normalizes (AGC) what
-  // gets through and drops noise/silence with its no-speech + hallucination filters; the user's
-  // microphone-sensitivity slider is the real, adjustable control on top of this floor.
-  SpeechRmsThreshold = 0.012;       // loopback / auto mode gate (near-silence floor)
-  DefaultMicSpeechThreshold = 0.012; // default mic slider position — lifted later by the user if noisy
-  SpeechMinVoicedFrames = 3;        // ~60 ms of voice is enough to count as speech
+  // The mic slider is the user's control: only audio ABOVE the threshold is treated as speech,
+  // captured and then normalized by the engine (AGC) — speaking below it is intentionally
+  // ignored. These are just sensible defaults; the user sets the line on the live meter.
+  SpeechRmsThreshold = 0.025;       // loopback / auto mode gate
+  DefaultMicSpeechThreshold = 0.030; // default mic slider position (user-adjustable)
+  SpeechMinVoicedFrames = 4;        // ~80 ms of voice to count as speech
   SpeechEdgePadSamples = 1280;      // keep 80 ms around the speech so words aren't clipped
 
 function FrameRms(const Samples: TArray<Single>; StartIdx, Count: Integer): Single;
