@@ -190,7 +190,7 @@ object MainForm: TMainForm
     Left = 0
     Top = 40
     Width = 430
-    Height = 411
+    Height = 391
     Align = alClient
     BevelOuter = bvNone
     Ctl3D = True
@@ -259,18 +259,36 @@ object MainForm: TMainForm
   end
   object pnlStatus: TPanel
     Left = 0
-    Top = 451
+    Top = 431
     Width = 430
-    Height = 28
+    Height = 48
     Align = alBottom
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 2
-    object lblStatusBar: TLabel
+    object lblInterviewTitle: TLabel
       Left = 0
       Top = 0
       Width = 430
-      Height = 28
+      Height = 18
+      Align = alTop
+      Alignment = taCenter
+      Caption = 'No interview profile set'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -12
+      Font.Name = 'Segoe UI Semibold'
+      Font.Style = [fsBold]
+      ParentFont = False
+      Transparent = True
+      Layout = tlCenter
+      ExplicitWidth = 130
+    end
+    object lblStatusBar: TLabel
+      Left = 0
+      Top = 18
+      Width = 430
+      Height = 30
       Align = alClient
       Alignment = taCenter
       BiDiMode = bdLeftToRight

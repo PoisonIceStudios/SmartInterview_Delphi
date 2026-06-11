@@ -35,11 +35,10 @@ internal static class Program
         WhisperBackendBootstrap.Configure(LogEngine);
     }
 
-    // Whisper initial-prompt. Measured with large-v3 forced to Italian on degraded audio:
-    //  - no prompt:                "Sai cos'è Unity?"  ->  "Sai cos'è una T?"
-    //  - 40-term raw keyword list: clean audio OK, but degraded short audio collapses into
-    //    invented phrases ("fai cose di un attimo") — a long unnatural prompt is hallucination
-    //    fuel when acoustics are poor;
+    // Whisper initial-prompt. Measured with large-v3 on degraded audio across languages:
+    //  - no prompt:                technical terms get misheard as similar everyday words;
+    //  - long raw keyword list:    clean audio OK, but degraded short audio collapses into
+    //    invented phrases — a long unnatural prompt is hallucination fuel when acoustics are poor;
     //  - SHORT prompt phrased as a natural sentence: near-perfect on the same degraded audio.
     // So: one natural sentence in the interview language, profile terms first, a small set of
     // common tech terms last. Greedy decoding measured equal to beam-5 with this prompt, so

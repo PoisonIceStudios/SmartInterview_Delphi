@@ -69,7 +69,7 @@ via `uPipeEngine.Start` (`CreateProcess` + pipe stdin/stdout).
 Se all'avvio compare "Engine not found":
 
 ```powershell
-cd C:\Users\devda\Documents\GitHub\SmartInterview_Delphi
+cd <repo-root>
 dotnet build Projects\Engine\SmartInterview.Engine.csproj -c Release
 ```
 

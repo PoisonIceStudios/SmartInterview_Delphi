@@ -17,6 +17,15 @@
     <DefineConstants>$(DefineConstants);DIAGNOSTIC_LOG</DefineConstants>
   </PropertyGroup>
 
+  <!-- Release: emit no PDB. This keeps absolute build paths (which embed the developer's
+       user folder) out of the shipped engine, strips method/local names that ease reverse
+       engineering, and slims the deploy. Deterministic builds normalise any remaining paths. -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="System.Management" Version="9.0.0" />
     <PackageReference Include="LLamaSharp" Version="0.27.0" />

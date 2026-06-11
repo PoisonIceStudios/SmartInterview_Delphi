@@ -33,6 +33,7 @@ type
     lblAnswer: TLabel;
     rtbResponse: TRichEdit;
     pnlStatus: TPanel;
+    lblInterviewTitle: TLabel;
     lblStatusBar: TLabel;
     mnuMain: TPopupMenu;
     miInterview: TMenuItem;
@@ -194,7 +195,6 @@ type
     FMatcher: TReadAlongMatcher;
     FMicMonitor: TWasapi16kSource;
     FProfile: TInterviewProfile;
-    FLblTitle: TLabel;
     FIntelligence: TResponseIntelligence;
     FTranscription: TTranscriptionIntelligence;
     FAnswerLength: TAnswerLength;
@@ -286,8 +286,8 @@ type
     procedure StartMicMonitor;
     procedure ToggleAutoMode;
     procedure SetAutoMode(On: Boolean);
+    procedure SetGlyphActive(Btn: TSpeedButton; Active: Boolean);
     procedure UpdateAutoVisual;
-    procedure UpdateSetupVisual;
     procedure UpdatePinVisual;
     procedure RefreshIntelligenceMenu;
     procedure RefreshTranscriptionMenu;
@@ -306,7 +306,6 @@ type
     procedure StopReadAlong;
     procedure StartSettingsMonitor;
     procedure StopSettingsMonitor;
-    procedure InitInterviewBanner;
     procedure UpdateInterviewBanner;
     function ProfileRoleSet: Boolean;
     function RequireProfileToStart: Boolean;
@@ -374,8 +373,8 @@ const
   MicMonitorWarmupMs = 2000;
   // Default mic gate (RMS, 0..1). Only audio above this is treated as speech, then normalized by
   // the engine (AGC). This is just the slider's starting point — the user sets the line on the
-  // live meter for their mic/room. (Was 0.500/0.060 too high, 0.012 too low.)
-  MicDefaultThreshold = 0.030;
+  // live meter for their mic/room.
+  MicDefaultThreshold = 0.020;
   MicMeterMaxStep = 0.06;       // ignore single-buffer spikes on the level meter
   MicActiveHoldMs = 250;
 
@@ -383,7 +382,9 @@ const
   GlyphPin = #$E840;
   GlyphPinUp = #$E718;
   GlyphNewChat = #$E8F2;  // ChatBubbles
-  NewChatButtonWidth = 52;
+
+  // Title-bar toggle buttons (pin, automatic mode) light up in this azure when active.
+  ActiveGlyphColor = TColor($00FF9900); // RGB(0,153,255)
 
 type
   TMainThreadInvoker = class
@@ -439,15 +440,10 @@ end;
 
 function TMainForm.CleanTranscriptText(const Text: string): string;
 begin
+  // Strip bracketed/parenthetical noise tokens and collapse whitespace. Subtitle-credit and
+  // thank-you outros that Whisper invents on silence are dropped at the source by the engine's
+  // multilingual hallucination filter, so no per-language phrase lists are needed here.
   Result := StripNoiseTokens(Text);
-  Result := StringReplace(Result, 'Sottotitoli e revisione a cura di QTSS', ' ',
-    [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, 'Sottotitoli creati dalla comunità', ' ',
-    [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, 'Sottotitoli creati dalla comunita', ' ',
-    [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, 'Subtitles by', ' ', [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, 'Translated by', ' ', [rfReplaceAll, rfIgnoreCase]);
   Result := TRegEx.Replace(Result, '\s+', ' ').Trim;
 end;
 
@@ -651,6 +647,7 @@ begin
     Pct := Min(100, Pct + OpacityStepPct);
   AlphaBlendValue := Round(Pct / 100 * 255);
   ApplyOpacity;
+  RegistrySetInt('OpacityPct', Pct);
   SetStatus(Format('Opacity: %d%%', [Pct]));
 end;
 
@@ -759,7 +756,10 @@ begin
   FListeningKey := ListeningKeyLoadSaved;
   FScrollMode := smAuto;
   FAutoSpeed := 26;
-  FUseMic := RegistryGetInt('UseMic', 1) <> 0;
+  // Manual-mode mic capture is OFF by default: by default a manual capture records PC audio
+  // only. The user opts in from Microphone settings. (Read-along voice scrolling uses its own
+  // microphone and is unaffected by this.)
+  FUseMic := RegistryGetInt('UseMic', 0) <> 0;
   FHiddenFromCapture := not ParamHasShowFlag;
   FEnginePingFails := 0;
   FEnginePingBusy := False;
@@ -784,7 +784,9 @@ begin
   pnlStatus.OnMouseDown := TitleBarMouseDown;
   lblStatusBar.OnMouseDown := TitleBarMouseDown;
   AlphaBlend := True;
-  AlphaBlendValue := 255;
+  // Restore the last opacity the user chose (clamped to the allowed range); 100% on first run.
+  AlphaBlendValue := Round(EnsureRange(RegistryGetInt('OpacityPct', 100),
+    OpacityMinPct, 100) / 100 * 255);
   FormStyle := fsStayOnTop;
   FMicVoiceTicks := 0;
   FMicMonitorIgnoreUntil := 0;
@@ -809,9 +811,7 @@ begin
   FReadDoneColor := clGrayText;
   rtbResponse.HideSelection := True;
   txtTranscript.HideSelection := True;
-  btnNew.Width := NewChatButtonWidth;
   InitTrayIcon;
-  UpdateSetupVisual;
   RefreshIntelligenceMenu;
   RefreshTranscriptionMenu;
   SyncMenuFromSettings;
@@ -866,9 +866,7 @@ begin
   ApplyOpacity;
   ApplyCaptureHiding;
   UpdatePinVisual;
-  UpdateSetupVisual;
-  if FLblTitle = nil then
-    InitInterviewBanner;
+  UpdateInterviewBanner;
   StartMicMonitor;
   tmrIcon.Enabled := True;
   tmrEngine.Enabled := True;
@@ -1722,13 +1720,24 @@ begin
     miRemoveWhisper.Caption := 'Remove a downloaded model (none available)';
 end;
 
-procedure TMainForm.UpdateAutoVisual;
+// Lights a title-bar toggle button: when active the glyph turns azure and the button shows a
+// pressed state. seFont is toggled so the active azure overrides the VCL style, while the
+// inactive state hands the glyph colour back to the style (correct on any theme).
+procedure TMainForm.SetGlyphActive(Btn: TSpeedButton; Active: Boolean);
 begin
-  btnAuto.Down := FAutoMode;
+  Btn.Down := Active;
+  if Active then
+  begin
+    Btn.StyleElements := Btn.StyleElements - [seFont];
+    Btn.Font.Color := ActiveGlyphColor;
+  end
+  else
+    Btn.StyleElements := Btn.StyleElements + [seFont];
 end;
 
-procedure TMainForm.UpdateSetupVisual;
+procedure TMainForm.UpdateAutoVisual;
 begin
+  SetGlyphActive(btnAuto, FAutoMode);
 end;
 
 procedure TMainForm.UpdatePinVisual;
@@ -1738,6 +1747,7 @@ begin
     btnPin.Caption := GlyphPin
   else
     btnPin.Caption := GlyphPinUp;
+  SetGlyphActive(btnPin, FormStyle = fsStayOnTop);
 end;
 
 procedure TMainForm.OnAutoSpeechStarted;
@@ -2170,23 +2180,6 @@ begin
   mnuMain.Popup(P.X, P.Y);
 end;
 
-procedure TMainForm.InitInterviewBanner;
-begin
-  // Interview title shown just above the status bar (e.g. "Unity Developer").
-  pnlStatus.Height := 48;
-  FLblTitle := TLabel.Create(Self);
-  FLblTitle.Parent := pnlStatus;
-  FLblTitle.Align := alTop;
-  FLblTitle.Height := 18;
-  FLblTitle.Alignment := taCenter;
-  FLblTitle.Layout := tlCenter;
-  FLblTitle.Transparent := True;
-  FLblTitle.Font.Style := [fsBold];
-  FLblTitle.Caption := '';
-  lblStatusBar.Align := alClient;
-  UpdateInterviewBanner;
-end;
-
 function TMainForm.ProfileRoleSet: Boolean;
 begin
   Result := Trim(FProfile.Role) <> '';
@@ -2194,13 +2187,12 @@ end;
 
 procedure TMainForm.UpdateInterviewBanner;
 begin
-  if FLblTitle <> nil then
-  begin
-    if ProfileRoleSet then
-      FLblTitle.Caption := Trim(FProfile.Role)
-    else
-      FLblTitle.Caption := 'No interview profile set';
-  end;
+  // The interview title (lblInterviewTitle) sits just above the status bar; it is defined at
+  // design time in pnlStatus.
+  if ProfileRoleSet then
+    lblInterviewTitle.Caption := Trim(FProfile.Role)
+  else
+    lblInterviewTitle.Caption := 'No interview profile set';
   if not ProfileRoleSet then
     SetStatus(#$26A0' Set your interview profile before starting.');
 end;
@@ -2218,7 +2210,6 @@ begin
   begin
     FProfile := ProfileLoad;
     FEngine.SetProfile(FProfile.Role, FProfile.TechStack, FProfile.JobDescription, FProfile.Experience);
-    UpdateSetupVisual;
     UpdateInterviewBanner;
     RefreshContextIndicator;
   end;
